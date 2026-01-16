@@ -1,0 +1,300 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    SISTEMA DE CONSULTA DETRAN-CE
+                    Como Usar e Executar o Código
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 ÍNDICE
+─────────
+1. Visão Geral
+2. Requisitos
+3. Instalação
+4. Configuração
+5. Como Executar
+6. Arquivos Gerados
+7. Estrutura do Código
+8. Solução de Problemas
+
+
+═══════════════════════════════════════════════════════════════════════════════
+1. VISÃO GERAL
+═══════════════════════════════════════════════════════════════════════════════
+
+Este sistema automatiza a consulta de multas, IPVA e licenciamento no site do
+DETRAN-CE. Ele:
+
+✓ Acessa automaticamente o site do DETRAN
+✓ Consulta múltiplos veículos em sequência
+✓ Extrai informações detalhadas de cada multa
+✓ Calcula valores totais automaticamente
+✓ Gera arquivo CSV com os resultados
+✓ Organiza tudo em planilha Excel formatada
+✓ Emite boletos automaticamente
+
+
+═══════════════════════════════════════════════════════════════════════════════
+2. REQUISITOS
+═══════════════════════════════════════════════════════════════════════════════
+
+SOFTWARE NECESSÁRIO:
+├─ Python 3.8 ou superior
+├─ Ambiente virtual Python (venv)
+└─ Navegador Chromium (instalado automaticamente pelo Playwright)
+
+BIBLIOTECAS PYTHON:
+├─ playwright (automação do navegador)
+├─ pandas (manipulação de dados)
+├─ openpyxl (criação de arquivos Excel)
+└─ numpy (processamento numérico)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+3. INSTALAÇÃO
+═══════════════════════════════════════════════════════════════════════════════
+
+PASSO 1: Instalar dependências
+   Execute no terminal PowerShell:
+   
+   C:\Users\Samuel\Downloads\detran-main\detran-main\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+PASSO 2: Instalar navegadores do Playwright
+   Execute:
+   
+   C:\Users\Samuel\Downloads\detran-main\detran-main\venv\Scripts\python.exe -m playwright install
+
+
+═══════════════════════════════════════════════════════════════════════════════
+4. CONFIGURAÇÃO
+═══════════════════════════════════════════════════════════════════════════════
+
+Abra o arquivo: detran_manual.py
+
+Localize a seção de configuração (linhas 8-12):
+
+VEICULOS = [
+    {"placa": "SBA7F09", "renavam": "01365705622"},
+    {"placa": "TIF1J98", "renavam": "01450499292"},
+]
+
+COMO CONFIGURAR:
+├─ Substitua as placas pelos seus veículos
+├─ Substitua os renavams correspondentes
+├─ Adicione mais veículos seguindo o mesmo padrão
+└─ Não remova as aspas nem as vírgulas
+
+
+═══════════════════════════════════════════════════════════════════════════════
+5. COMO EXECUTAR
+═══════════════════════════════════════════════════════════════════════════════
+
+MODO 1: Executar Consulta Completa
+────────────────────────────────────
+
+Abra o PowerShell e execute:
+
+   cd C:\Users\Samuel\Downloads\detran-main\detran-main
+   C:/Users/Samuel/Downloads/detran-main/detran-main/venv/Scripts/python.exe detran_manual.py
+
+O QUE ACONTECE:
+├─ Navegador abre automaticamente (não feche!)
+├─ Sistema acessa o DETRAN-CE
+├─ Consulta cada veículo configurado
+├─ Extrai dados das multas
+├─ Calcula valores totais
+├─ Marca multas e emite boletos
+├─ Salva tudo no arquivo CSV
+└─ Aguarda você pressionar ENTER para fechar
+
+
+MODO 2: Organizar Excel (após consulta)
+────────────────────────────────────────
+
+Execute:
+
+   C:/Users/Samuel/Downloads/detran-main/detran-main/venv/Scripts/python.exe organizar_excel.py
+
+O QUE ACONTECE:
+├─ Lê o arquivo resultado_detran.csv
+├─ Separa cada multa em uma linha
+├─ Extrai: AIT, Descrição, Datas, Valores
+├─ Formata profissionalmente
+└─ Gera arquivo Excel organizado
+
+
+═══════════════════════════════════════════════════════════════════════════════
+6. ARQUIVOS GERADOS
+═══════════════════════════════════════════════════════════════════════════════
+
+resultado_detran.csv
+├─ Arquivo bruto com todas as consultas
+├─ Uma linha por veículo consultado
+├─ Contém todos os dados extraídos
+└─ Formato: CSV separado por vírgulas
+
+resultado_detran_organizado.xlsx
+├─ Planilha Excel formatada profissionalmente
+├─ Uma linha por multa individual
+├─ Colunas organizadas:
+│  ├─ Data/Hora Consulta
+│  ├─ Placa
+│  ├─ Renavam
+│  ├─ AIT (código da multa)
+│  ├─ Descrição da Infração
+│  ├─ Data Infração
+│  ├─ Vencimento
+│  ├─ Valor Original
+│  ├─ Valor com Desconto
+│  ├─ IPVA Pendente
+│  └─ Licenciamento Pendente
+└─ Formatação com cores, bordas e larguras ajustadas
+
+
+═══════════════════════════════════════════════════════════════════════════════
+7. ESTRUTURA DO CÓDIGO
+═══════════════════════════════════════════════════════════════════════════════
+
+detran_manual.py - SCRIPT PRINCIPAL
+────────────────────────────────────
+
+FUNÇÕES PRINCIPAIS:
+
+log(msg)
+├─ Exibe mensagens no console
+└─ Facilita acompanhamento do processo
+
+detectar_pendencias(texto)
+├─ Analisa texto da página do DETRAN
+├─ Identifica quantidade de multas
+├─ Detecta IPVA e Licenciamento pendentes
+└─ Retorna dicionário com resultados
+
+extrair_motivos_multas(page)
+├─ Lê tabela de multas na página
+├─ Extrai descrição de cada multa
+├─ Calcula valor total somando valores
+├─ Remove linhas de cabeçalho e TOTAL
+└─ Retorna lista de motivos e valor total
+
+marcar_checkboxes_multas(page)
+├─ Localiza checkboxes na tabela
+├─ Marca todas as multas encontradas
+└─ Retorna sucesso/falha
+
+clicar_emitir(page)
+├─ Localiza botão "Emitir"
+├─ Clica para gerar boleto
+└─ Aguarda processamento
+
+processar_veiculo(browser, veiculo, indice)
+├─ Função principal de processamento
+├─ Navega até o DETRAN
+├─ Preenche formulário
+├─ Consulta dados
+├─ Extrai informações
+├─ Emite boletos
+└─ Salva no CSV
+
+main()
+├─ Ponto de entrada do programa
+├─ Inicia navegador
+├─ Processa cada veículo
+├─ Adiciona intervalos entre consultas
+└─ Fecha ao final
+
+
+organizar_excel.py - ORGANIZADOR DE PLANILHA
+─────────────────────────────────────────────
+
+PROCESSO:
+
+1. Leitura do CSV
+   ├─ Usa pandas para ler resultado_detran.csv
+   └─ Valida estrutura de colunas
+
+2. Extração de Dados
+   ├─ Separa multas por "|"
+   ├─ Usa regex para extrair campos:
+   │  ├─ AIT: [A-Z]\d+ antes de --
+   │  ├─ Descrição: texto entre -- e data
+   │  ├─ Datas: padrão dd/mm/yyyy
+   │  └─ Valores: padrão R$ xxx,xx
+   └─ Cria uma linha por multa
+
+3. Formatação Excel
+   ├─ Cabeçalho azul com texto branco
+   ├─ Bordas em todas as células
+   ├─ Alinhamento centralizado
+   ├─ Larguras de colunas otimizadas
+   └─ Primeira linha congelada
+
+
+═══════════════════════════════════════════════════════════════════════════════
+8. SOLUÇÃO DE PROBLEMAS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA: Navegador não abre
+SOLUÇÃO:
+├─ Reinstale navegadores: python -m playwright install
+└─ Verifique se o Playwright está instalado
+
+PROBLEMA: Erro "Permission denied" no Excel
+SOLUÇÃO:
+├─ Feche o arquivo resultado_detran_organizado.xlsx
+└─ Execute o script novamente
+
+PROBLEMA: Não encontra multas
+SOLUÇÃO:
+├─ Verifique placa e renavam configurados
+├─ Confirme se há multas no site do DETRAN
+└─ Aguarde o site carregar completamente
+
+PROBLEMA: Valores não aparecem no Excel
+SOLUÇÃO:
+├─ Verifique se o CSV foi gerado corretamente
+├─ Execute organizar_excel.py novamente
+└─ Confira se há dados na coluna motivos_multas
+
+PROBLEMA: Script para no meio
+SOLUÇÃO:
+├─ Verifique conexão com internet
+├─ Aumente tempo de espera (edite time.sleep)
+└─ Execute novamente (o CSV acumula dados)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+OBSERVAÇÕES IMPORTANTES
+═══════════════════════════════════════════════════════════════════════════════
+
+⚠️ INTERVALOS ENTRE CONSULTAS
+   O sistema aguarda 20-35 segundos entre consultas para evitar bloqueio
+   pelo site do DETRAN. NÃO reduza esses intervalos!
+
+⚠️ NÃO FECHE O NAVEGADOR
+   O navegador é controlado automaticamente. Deixe-o aberto durante todo
+   o processo.
+
+⚠️ DADOS ACUMULADOS
+   O arquivo CSV acumula dados. Se quiser começar do zero, delete o
+   arquivo resultado_detran.csv antes de executar.
+
+✓ BACKUP
+   Sempre faça backup dos arquivos CSV e Excel antes de executar novamente.
+
+✓ VERIFICAÇÃO
+   Sempre confira os dados gerados com o site do DETRAN para garantir
+   precisão.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SUPORTE
+═══════════════════════════════════════════════════════════════════════════════
+
+Em caso de dúvidas:
+1. Leia este arquivo completo
+2. Verifique os logs no console
+3. Confira se seguiu todos os passos de instalação
+4. Revise a configuração de veículos no código
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                            FIM DO GUIA
+═══════════════════════════════════════════════════════════════════════════════

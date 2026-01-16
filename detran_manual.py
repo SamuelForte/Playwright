@@ -32,6 +32,7 @@ def detectar_pendencias(texto: str) -> dict:  # Função que analisa o texto da 
         "multas": 0,  # Contador de multas
         "ipva": False,  # Status do IPVA
         "licenciamento": False,  # Status do Licenciamento
+        "motivos_multas": []  # Lista para armazenar os motivos das multas
     }
     match = re.search(r"possui\s+(\d+)\s+multa", texto)  # Procura o padrão "possui X multas"
     if match:  # Se encontrar o padrão acima
@@ -53,7 +54,11 @@ def salvar_csv(dados: dict):  # Função para gravar os dados em planilha
     with open(CSV_ARQUIVO, "a", newline="", encoding="utf-8") as f:  # Abre o arquivo no modo 'anexar' (append)
         writer = csv.writer(f)  # Cria o objeto que escreve no CSV
         if not arquivo_existe:  # Se for um arquivo novo
-            writer.writerow(["data_hora", "placa", "renavam", "quantidade_multas", "ipva", "licenciamento"])  # Escreve o cabeçalho
+            writer.writerow(["data_hora", "placa", "renavam", "quantidade_multas", "ipva", "licenciamento", "motivos_multas"])  # Escreve o cabeçalho
+        
+        # Formata os motivos das multas em uma string separada por | 
+        motivos_str = " | ".join(dados.get("motivos_multas", [])) if dados.get("motivos_multas") else "Nenhuma"
+        
         writer.writerow([  # Escreve a linha de dados do veículo atual
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # Data e hora atual
             dados["placa"],  # Placa do carro
@@ -61,6 +66,7 @@ def salvar_csv(dados: dict):  # Função para gravar os dados em planilha
             dados["multas"],  # Quantidade de multas achadas
             "SIM" if dados["ipva"] else "NÃO",  # Converte Booleano para SIM/NÃO
             "SIM" if dados["licenciamento"] else "NÃO",  # Converte Booleano para SIM/NÃO
+            motivos_str  # Motivos das multas separados por |
         ])
 
 # ================= AÇÕES NA TELA =================
