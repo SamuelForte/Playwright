@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright, TimeoutError  # Importa as ferr
 # ================= CONFIGURAÇÕES =================
 
 URL = "https://sistemas.detran.ce.gov.br/central"  # Define o endereço do site do DETRAN-CE
-CSV_ARQUIVO = "resultado_detran.csv"  # Nome do arquivo onde os dados serão salvos
+CSV_ARQUIVO = "_temp_detran.csv"  # Nome do arquivo temporário onde os dados serão salvos
 
 VEICULOS = [  # Lista de dicionários contendo os dados dos carros
     {"placa": "SBA7F09", "renavam": "01365705622"},  # Dados do veículo 1

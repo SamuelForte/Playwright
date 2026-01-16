@@ -5,7 +5,7 @@ import os
 import re
 
 # Ler o CSV usando pandas diretamente
-csv_file = "resultado_detran.csv"
+csv_file = "_temp_detran.csv"
 df = pd.read_csv(csv_file, encoding='utf-8')
 
 print(f"DataFrame shape: {df.shape}")
@@ -203,3 +203,9 @@ print(f"🚗 Veículos únicos: {df_novo['Placa'].nunique()}")
 print(f"\n📝 Colunas criadas:")
 for col in df_novo.columns:
     print(f"   - {col}")
+
+# Deletar arquivo temporário
+if os.path.exists(csv_file):
+    os.remove(csv_file)
+    print(f"\n🗑️  Arquivo temporário removido: {csv_file}")
+
