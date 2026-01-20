@@ -113,17 +113,22 @@ Execute:
    C:/Users/Samuel/Downloads/detran-main/detran-main/venv/Scripts/python.exe organizar_excel.py
 
 O QUE ACONTECE:
-├─ Lê o arquivo temporário _temp_detran.csv
+├─ Lê o arquivo resultado_detran.csv
 ├─ Separa cada multa em uma linha
 ├─ Extrai: AIT, Descrição, Datas, Valores
 ├─ Formata profissionalmente
-├─ Gera arquivo Excel organizado
-└─ Deleta automaticamente o arquivo temporário
+└─ Gera arquivo Excel organizado
 
 
 ═══════════════════════════════════════════════════════════════════════════════
 6. ARQUIVOS GERADOS
 ═══════════════════════════════════════════════════════════════════════════════
+
+resultado_detran.csv
+├─ Arquivo bruto com todas as consultas
+├─ Uma linha por veículo consultado
+├─ Contém todos os dados extraídos
+└─ Formato: CSV separado por vírgulas
 
 resultado_detran_organizado.xlsx
 ├─ Planilha Excel formatada profissionalmente
@@ -141,12 +146,6 @@ resultado_detran_organizado.xlsx
 │  ├─ IPVA Pendente
 │  └─ Licenciamento Pendente
 └─ Formatação com cores, bordas e larguras ajustadas
-
-ARQUIVOS TEMPORÁRIOS:
-├─ _temp_detran.csv
-│  └─ Criado automaticamente durante a consulta
-│  └─ Deletado automaticamente ao gerar o Excel
-└─ Não precisa manipular este arquivo
 
 
 ═══════════════════════════════════════════════════════════════════════════════

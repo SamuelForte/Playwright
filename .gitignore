@@ -51,3 +51,28 @@ dist/
 # --- OS Files ---
 .DS_Store
 Thumbs.db
+
+# --- Frontend (Next.js) ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+
+# --- Arquivos de Resultado (Dados Sensíveis) ---
+# Excel com dados de multas
+*.xlsx
+resultado_detran_*.xlsx
+resultado_detran_organizado.xlsx
+
+# PDFs de boletos
+boletos/
+*.pdf
+
+# --- Temporários ---
+execucao.log
+*.tmp
+*.bak

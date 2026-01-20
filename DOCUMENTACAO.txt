@@ -1,0 +1,685 @@
+================================================================================
+           DOCUMENTAÇÃO DO SISTEMA DE CONSULTA DETRAN-CE
+================================================================================
+
+VERSÃO: 1.0.0
+DATA: Janeiro 2026
+AUTOR: Sistema Integrado de Consulta de Multas DETRAN-CE
+
+================================================================================
+1. VISÃO GERAL
+================================================================================
+
+Este sistema automatiza a consulta de multas de trânsito no portal DETRAN-CE,
+integrando três componentes principais:
+
+  1. Backend API (FastAPI) - Gerencia requisições e orquestra automação
+  2. Frontend Web (Next.js) - Interface visual para usuários
+  3. Automação (Playwright) - Script Python que acessa o site DETRAN-CE
+
+FUNCIONALIDADES PRINCIPAIS:
+  • Consulta automática de multas para múltiplos veículos
+  • Extração de dados detalhados (AIT, valores, datas, órgão autuador)
+  • Download de boletos/PDFs automaticamente
+  • Geração de planilha Excel consolidada e formatada
+  • Interface web com status em tempo real
+  • Histórico de consultas realizadas
+
+================================================================================
+2. ARQUITETURA DO SISTEMA
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         USUÁRIO                                     │
+│                            ↓                                        │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              FRONTEND (Next.js)                              │  │
+│  │          http://localhost:3000                               │  │
+│  │  • Dashboard                                                 │  │
+│  │  • Nova Consulta                                             │  │
+│  │  • Processamento (status em tempo real)                      │  │
+│  │  • Resultados                                                │  │
+│  │  • Histórico                                                 │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                            ↓ HTTP/REST API                          │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              BACKEND API (FastAPI)                           │  │
+│  │          http://localhost:8000                               │  │
+│  │  • POST /consultas - Inicia consulta                         │  │
+│  │  • GET /consultas/{id}/status - Status em tempo real         │  │
+│  │  • GET /consultas/{id}/resultado - Dados completos           │  │
+│  │  • GET /consultas/{id}/excel - Download Excel                │  │
+│  │  • GET /consultas/{id}/pdf/{file} - Download PDF             │  │
+│  │  • GET /config/veiculos - Lista veículos configurados        │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                            ↓ Importa e executa                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │         AUTOMAÇÃO (detran_manual.py)                         │  │
+│  │  • Playwright Sync API (Chromium)                            │  │
+│  │  • Navegação automática no site DETRAN-CE                    │  │
+│  │  • Extração de dados de multas                               │  │
+│  │  • Download de boletos PDF                                   │  │
+│  │  • Geração de Excel formatado                                │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                            ↓ Acessa                                 │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │      SITE EXTERNO: DETRAN-CE                                 │  │
+│  │      https://sistemas.detran.ce.gov.br/central               │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+3. ESTRUTURA DE ARQUIVOS
+================================================================================
+
+detran-main/
+│
+├── detran_manual.py          # Script principal de automação (Playwright)
+├── api_server.py             # Servidor FastAPI (backend)
+├── requirements.txt          # Dependências Python
+├── DOCUMENTACAO.txt          # Este arquivo
+├── README.md                 # Documentação resumida
+├── COMO_USAR.txt             # Guia de uso original
+│
+├── venv/                     # Ambiente virtual Python
+│
+├── boletos/                  # PDFs baixados (organizados por data)
+│   └── DD-MM-YYYY/
+│       ├── extrato_*.pdf
+│       └── ...
+│
+├── resultado_detran_*.xlsx   # Planilhas Excel geradas
+│
+└── frontend/                 # Aplicação Next.js
+    ├── package.json
+    ├── next.config.ts
+    ├── tsconfig.json
+    │
+    ├── src/
+    │   ├── app/              # Pages (App Router)
+    │   │   ├── dashboard/
+    │   │   ├── nova-consulta/
+    │   │   ├── processamento/[id]/
+    │   │   ├── resultados/[id]/
+    │   │   └── historico/
+    │   │
+    │   ├── components/       # Componentes React reutilizáveis
+    │   │   ├── Layout.tsx
+    │   │   ├── VehicleForm.tsx
+    │   │   ├── FileUpload.tsx
+    │   │   ├── MultasTable.tsx
+    │   │   ├── ProcessStatus.tsx
+    │   │   └── StatusCard.tsx
+    │   │
+    │   └── lib/
+    │       └── api.ts        # Cliente HTTP (Axios + React Query)
+    │
+    └── .next/                # Build output (gerado automaticamente)
+
+================================================================================
+4. REQUISITOS DO SISTEMA
+================================================================================
+
+SOFTWARE NECESSÁRIO:
+  • Windows 10/11
+  • Python 3.8+ (recomendado 3.10+)
+  • Node.js 18+ e npm
+  • PowerShell
+  • Navegador Chromium (instalado automaticamente pelo Playwright)
+
+DEPENDÊNCIAS PYTHON (requirements.txt):
+  • playwright>=1.40.0        # Automação web
+  • pandas>=2.0.0             # Manipulação de dados
+  • openpyxl>=3.1.0           # Geração de Excel
+  • pdfplumber>=0.10.0        # Leitura de PDFs
+  • fastapi>=0.104.0          # Framework API
+  • uvicorn[standard]>=0.24.0 # Servidor ASGI
+  • pydantic>=2.0.0           # Validação de dados
+
+DEPENDÊNCIAS FRONTEND (package.json):
+  • next@^15.1.0              # Framework React
+  • react@^18.3.1
+  • @mui/material@^6.1.0      # Componentes UI
+  • @tanstack/react-query     # Gerenciamento de estado
+  • axios@^1.7.0              # Cliente HTTP
+
+================================================================================
+5. INSTALAÇÃO E CONFIGURAÇÃO
+================================================================================
+
+PASSO 1: CONFIGURAR PYTHON
+─────────────────────────────
+1. Criar ambiente virtual:
+   cd C:\Users\Samuel\Downloads\detran-main\detran-main
+   python -m venv venv
+
+2. Ativar ambiente virtual:
+   .\venv\Scripts\Activate.ps1
+
+3. Instalar dependências:
+   pip install -r requirements.txt
+
+4. Instalar Playwright:
+   playwright install chromium
+
+
+PASSO 2: CONFIGURAR FRONTEND
+─────────────────────────────
+1. Navegar para pasta frontend:
+   cd frontend
+
+2. Instalar dependências:
+   npm install
+
+3. Voltar para raiz:
+   cd ..
+
+
+PASSO 3: CONFIGURAR VEÍCULOS
+─────────────────────────────
+Editar detran_manual.py (linha 22-26):
+
+VEICULOS = [
+    {"placa": "ABC1D23", "renavam": "12345678901"},
+    {"placa": "XYZ9W87", "renavam": "98765432109"},
+    # Adicionar mais veículos aqui
+]
+
+IMPORTANTE: Use placas válidas e RENAVAMs corretos (11 dígitos).
+
+================================================================================
+6. COMO USAR O SISTEMA
+================================================================================
+
+MÉTODO 1: USANDO INTERFACE WEB (RECOMENDADO)
+─────────────────────────────────────────────
+
+1. INICIAR BACKEND (Terminal 1):
+   & .\venv\Scripts\Activate.ps1
+   python api_server.py
+   
+   ✓ Aguarde mensagem: "Uvicorn running on http://0.0.0.0:8000"
+
+2. INICIAR FRONTEND (Terminal 2):
+   cd frontend
+   npm run dev
+   
+   ✓ Aguarde mensagem: "Ready on http://localhost:3000"
+
+3. ACESSAR INTERFACE:
+   • Abrir navegador em: http://localhost:3000
+   • Ir para "Nova Consulta"
+   • Verificar lista de veículos (sincronizada com detran_manual.py)
+   • Clicar em "Iniciar Consulta Automática"
+   • Acompanhar progresso na tela de Processamento
+   • Ver resultados e baixar Excel/PDFs
+
+4. PARA ENCERRAR:
+   • Backend: Ctrl+C no terminal 1
+   • Frontend: Ctrl+C no terminal 2
+
+
+MÉTODO 2: USANDO SCRIPT ORIGINAL (SEM INTERFACE)
+─────────────────────────────────────────────────
+
+1. Ativar ambiente:
+   & .\venv\Scripts\Activate.ps1
+
+2. Executar script:
+   python detran_manual.py
+
+3. Acompanhar no terminal:
+   • Navegador Chromium abrirá automaticamente
+   • Logs mostram progresso de cada veículo
+   • Excel gerado: resultado_detran_organizado.xlsx
+   • PDFs salvos em: boletos/DD-MM-YYYY/
+
+================================================================================
+7. ENDPOINTS DA API (Backend)
+================================================================================
+
+BASE URL: http://localhost:8000
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ POST /consultas                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│ Inicia nova consulta de veículos                                    │
+│                                                                      │
+│ Request Body:                                                        │
+│   {                                                                  │
+│     "veiculos": [                                                    │
+│       {"placa": "ABC1D23", "renavam": "12345678901"},                │
+│       {"placa": "XYZ9W87", "renavam": "98765432109"}                 │
+│     ]                                                                │
+│   }                                                                  │
+│                                                                      │
+│ Response:                                                            │
+│   {"consulta_id": "877e4d92-20e8-4ddd-be15-94bb5f108c52"}            │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /consultas/{consulta_id}/status                                 │
+├──────────────────────────────────────────────────────────────────────┤
+│ Retorna status em tempo real da consulta                            │
+│                                                                      │
+│ Response:                                                            │
+│   {                                                                  │
+│     "id": "877e4d92-...",                                            │
+│     "status": "processing",  // pending|processing|completed|error   │
+│     "veiculos": [                                                    │
+│       {                                                              │
+│         "placa": "ABC1D23",                                          │
+│         "status": "completed",                                       │
+│         "multas_count": 3,                                           │
+│         "valor_total": 450.50,                                       │
+│         "mensagem": "3 multa(s) encontrada(s)"                       │
+│       }                                                              │
+│     ],                                                               │
+│     "total_multas": 3,                                               │
+│     "valor_total": 450.50,                                           │
+│     "created_at": "2026-01-20T14:30:00"                              │
+│   }                                                                  │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /consultas/{consulta_id}/resultado                              │
+├──────────────────────────────────────────────────────────────────────┤
+│ Retorna dados completos das multas (apenas quando concluída)        │
+│                                                                      │
+│ Response:                                                            │
+│   {                                                                  │
+│     "id": "877e4d92-...",                                            │
+│     "multas": [                                                      │
+│       {                                                              │
+│         "placa": "ABC1D23",                                          │
+│         "numero": 1,                                                 │
+│         "ait": "CE123456",                                           │
+│         "motivo": "Excesso de velocidade",                           │
+│         "data_infracao": "15/12/2025",                               │
+│         "data_vencimento": "15/01/2026",                             │
+│         "valor": "R$ 130,16",                                        │
+│         "valor_a_pagar": "R$ 130,16",                                │
+│         "orgao_autuador": "DEMUTRAN FORTALEZA",                      │
+│         "codigo_pagamento": "856300000010..."                        │
+│       }                                                              │
+│     ],                                                               │
+│     "total_multas": 3,                                               │
+│     "valor_total": 450.50,                                           │
+│     "excel_path": "resultado_detran_877e4d92.xlsx",                  │
+│     "pdf_paths": ["extrato_1737385200.pdf"]                          │
+│   }                                                                  │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /consultas/{consulta_id}/excel                                  │
+├──────────────────────────────────────────────────────────────────────┤
+│ Faz download do arquivo Excel da consulta                           │
+│                                                                      │
+│ Response: Arquivo .xlsx (download automático)                        │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /consultas/{consulta_id}/pdf/{filename}                         │
+├──────────────────────────────────────────────────────────────────────┤
+│ Faz download de um PDF específico                                   │
+│                                                                      │
+│ Response: Arquivo .pdf (download automático)                         │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /config/veiculos                                                 │
+├──────────────────────────────────────────────────────────────────────┤
+│ Lista veículos configurados em detran_manual.py (VEICULOS)          │
+│                                                                      │
+│ Response:                                                            │
+│   [                                                                  │
+│     {"placa": "SBA7F09", "renavam": "01365705622"},                  │
+│     {"placa": "TIF1J98", "renavam": "01450499292"},                  │
+│     {"placa": "TIF1J99", "renavam": "01450499293"}                   │
+│   ]                                                                  │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /consultas/historico                                             │
+├──────────────────────────────────────────────────────────────────────┤
+│ Lista todas as consultas realizadas (ordenadas por data)            │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ GET /health                                                          │
+├──────────────────────────────────────────────────────────────────────┤
+│ Health check da API                                                 │
+│                                                                      │
+│ Response:                                                            │
+│   {                                                                  │
+│     "status": "ok",                                                  │
+│     "timestamp": "2026-01-20T14:30:00",                              │
+│     "consultas_ativas": 5                                            │
+│   }                                                                  │
+└──────────────────────────────────────────────────────────────────────┘
+
+DOCUMENTAÇÃO INTERATIVA:
+  • Swagger UI: http://localhost:8000/docs
+  • ReDoc: http://localhost:8000/redoc
+
+================================================================================
+8. FLUXO DE FUNCIONAMENTO
+================================================================================
+
+ETAPA 1: USUÁRIO INICIA CONSULTA
+─────────────────────────────────
+  Frontend → POST /consultas → Backend
+  
+  O backend cria um UUID único e registra a consulta em memória
+
+
+ETAPA 2: PROCESSAMENTO EM BACKGROUND
+─────────────────────────────────────
+  Backend → Task assíncrona → detran_manual.py
+  
+  Para cada veículo:
+    a) Abre navegador Chromium (Playwright)
+    b) Acessa https://sistemas.detran.ce.gov.br/central
+    c) Preenche formulário (Placa + RENAVAM)
+    d) Clica em Consultar
+    e) Extrai quantidade de multas
+    f) Se houver multas:
+       - Abre detalhes
+       - Extrai dados de cada multa (AIT, valores, datas)
+       - Marca checkboxes
+       - Clica em "Emitir"
+       - Baixa PDF do boleto
+       - Extrai código de pagamento e órgão autuador do PDF
+    g) Atualiza status do veículo
+
+
+ETAPA 3: POLLING DE STATUS (Frontend)
+──────────────────────────────────────
+  Frontend → GET /consultas/{id}/status (a cada 2 segundos)
+  
+  Exibe progresso em tempo real:
+    • "Aguardando processamento"
+    • "Consultando DETRAN-CE..."
+    • "3 multa(s) encontrada(s)" ✓
+
+
+ETAPA 4: GERAÇÃO DE ARQUIVOS
+─────────────────────────────
+  Backend → salvar_no_excel(multas)
+  
+  Cria planilha Excel com:
+    • Cabeçalho formatado (azul escuro, negrito, branco)
+    • Bordas em todas as células
+    • Colunas ajustadas automaticamente
+    • Dados organizados por placa
+    • Filtros ativados
+  
+  PDFs salvos em: boletos/DD-MM-YYYY/
+
+
+ETAPA 5: EXIBIÇÃO DE RESULTADOS
+────────────────────────────────
+  Frontend → GET /consultas/{id}/resultado
+  
+  Mostra tabela com:
+    • Filtros por órgão autuador
+    • Busca por texto
+    • Paginação (5/10/25/50 itens)
+    • Botões de download (Excel e PDFs)
+
+================================================================================
+9. CONFIGURAÇÕES AVANÇADAS
+================================================================================
+
+TIMEOUTS (detran_manual.py)
+───────────────────────────
+TIMEOUT_PADRAO = 20000       # Timeout geral (ms)
+TIMEOUT_MULTAS = 20000       # Espera detalhe multas
+TIMEOUT_TABELA = 20000       # Espera tabela carregar
+
+DELAYS (detran_manual.py)
+─────────────────────────
+DELAY_SCROLL = 0.2           # Scroll entre checkboxes
+DELAY_CHECKBOX = 0.2         # Após clicar checkbox
+DELAY_EMITIR = 2             # Após clicar Emitir
+DELAY_DIGITACAO = 0.1        # Entre cada caractere digitado
+INTERVALO_ENTRE_CONSULTAS = 2  # Entre veículos (segundos)
+
+NAVEGADOR (detran_manual.py)
+────────────────────────────
+Por padrão usa headless=False (navegador visível).
+Para modo invisível, alterar linha:
+  browser = p.chromium.launch(headless=True)
+
+CORS (api_server.py)
+────────────────────
+Por padrão permite apenas http://localhost:3000
+Para adicionar outras origens:
+  allow_origins=["http://localhost:3000", "http://outro-dominio.com"]
+
+================================================================================
+10. DADOS EXTRAÍDOS
+================================================================================
+
+INFORMAÇÕES DE CADA MULTA:
+  • Placa do veículo
+  • Número sequencial
+  • AIT (Auto de Infração de Trânsito)
+  • AIT Originária
+  • Motivo/Descrição da infração
+  • Data da Infração
+  • Data de Vencimento
+  • Valor original
+  • Valor a Pagar (com desconto se aplicável)
+  • Órgão Autuador (extraído do PDF)
+  • Código de pagamento em barra (extraído do PDF)
+
+FORMATO EXCEL:
+┌────────┬───┬──────────┬───────────────┬─────────────┬─────────────┬──────────────┬────────┬──────────────┬──────────────┬──────────────┐
+│ Placa  │ # │   AIT    │ AIT Originária│   Motivo    │ Data Infr.  │ Data Venc.   │ Valor  │ Valor a Pagar│ Órgão Autuad.│  Cód. Pag.   │
+├────────┼───┼──────────┼───────────────┼─────────────┼─────────────┼──────────────┼────────┼──────────────┼──────────────┼──────────────┤
+│ABC1D23 │ 1 │ CE123456 │      -        │ Excesso vel.│ 15/12/2025  │ 15/01/2026   │R$ 130,│ R$ 130,16    │ DEMUTRAN FOR │ 8563000000...│
+└────────┴───┴──────────┴───────────────┴─────────────┴─────────────┴──────────────┴────────┴──────────────┴──────────────┴──────────────┘
+
+================================================================================
+11. TROUBLESHOOTING (RESOLUÇÃO DE PROBLEMAS)
+================================================================================
+
+PROBLEMA: "ERR_CONNECTION_REFUSED" ao acessar frontend
+───────────────────────────────────────────────────────
+CAUSA: Frontend não está rodando
+SOLUÇÃO:
+  cd frontend
+  npm run dev
+
+PROBLEMA: "Consulta não encontrada" na API
+───────────────────────────────────────────
+CAUSA: Banco de dados em memória (dados perdidos ao reiniciar)
+SOLUÇÃO:
+  • Manter API rodando enquanto usa
+  • Para produção, implementar banco de dados persistente
+
+PROBLEMA: Navegador não abre automaticamente
+─────────────────────────────────────────────
+CAUSA: Playwright não instalado corretamente
+SOLUÇÃO:
+  & .\venv\Scripts\Activate.ps1
+  playwright install chromium
+
+PROBLEMA: "ModuleNotFoundError: No module named 'playwright'"
+──────────────────────────────────────────────────────────────
+CAUSA: Ambiente virtual não ativado ou dependências não instaladas
+SOLUÇÃO:
+  & .\venv\Scripts\Activate.ps1
+  pip install -r requirements.txt
+
+PROBLEMA: Erro ao salvar Excel "PermissionError"
+─────────────────────────────────────────────────
+CAUSA: Arquivo Excel está aberto no Excel/Calc
+SOLUÇÃO:
+  • Fechar o arquivo Excel
+  • Executar novamente
+
+PROBLEMA: Timeout ao consultar veículos
+────────────────────────────────────────
+CAUSA: Site DETRAN-CE lento ou fora do ar
+SOLUÇÃO:
+  • Aumentar TIMEOUT_PADRAO em detran_manual.py
+  • Verificar se site está acessível manualmente
+  • Tentar novamente mais tarde
+
+PROBLEMA: Não encontra código de pagamento no PDF
+──────────────────────────────────────────────────
+CAUSA: Formato do PDF mudou ou pdfplumber não instalado
+SOLUÇÃO:
+  pip install pdfplumber
+  • Verificar se PDF foi baixado em boletos/DD-MM-YYYY/
+  • Abrir PDF manualmente para confirmar conteúdo
+
+PROBLEMA: CORS error no console do navegador
+─────────────────────────────────────────────
+CAUSA: Frontend em domínio não autorizado
+SOLUÇÃO:
+  • Verificar se frontend está em http://localhost:3000
+  • Adicionar domínio em api_server.py → allow_origins
+
+PROBLEMA: "DeprecationWarning: on_event is deprecated"
+───────────────────────────────────────────────────────
+CAUSA: FastAPI versão mais recente deprecou @app.on_event
+SOLUÇÃO: Aviso apenas, não impacta funcionamento
+  • Sistema funciona normalmente
+  • Para remover aviso, migrar para lifespan events (futuro)
+
+================================================================================
+12. SEGURANÇA E BOAS PRÁTICAS
+================================================================================
+
+DADOS SENSÍVEIS:
+  ⚠ Placas e RENAVAMs são dados pessoais
+  • Não compartilhar arquivos Excel em repositórios públicos
+  • Adicionar *.xlsx ao .gitignore
+  • Não expor API em internet pública sem autenticação
+
+VALIDAÇÃO:
+  ✓ Frontend valida formato de placas (Mercosul e antigo)
+  ✓ Frontend valida RENAVAM (11 dígitos)
+  ✓ Backend valida campos obrigatórios via Pydantic
+
+LIMITAÇÕES ATUAIS:
+  • Sem autenticação de usuários
+  • Banco de dados em memória (dados perdidos ao reiniciar)
+  • CORS aberto para localhost apenas
+  • Sem rate limiting
+
+MELHORIAS RECOMENDADAS PARA PRODUÇÃO:
+  1. Implementar PostgreSQL/MongoDB para persistência
+  2. Adicionar autenticação JWT
+  3. Configurar HTTPS com certificado SSL
+  4. Implementar rate limiting (ex: 10 consultas/hora por IP)
+  5. Adicionar logs estruturados
+  6. Configurar backup automático de dados
+  7. Implementar fila de processamento (Celery/RQ)
+  8. Adicionar monitoramento (Prometheus/Grafana)
+
+================================================================================
+13. MANUTENÇÃO E ATUALIZAÇÕES
+================================================================================
+
+ATUALIZAR DEPENDÊNCIAS PYTHON:
+  pip install --upgrade -r requirements.txt
+
+ATUALIZAR DEPENDÊNCIAS FRONTEND:
+  cd frontend
+  npm update
+
+VERIFICAR VULNERABILIDADES:
+  npm audit
+  npm audit fix
+
+LIMPAR ARQUIVOS TEMPORÁRIOS:
+  • Deletar pasta .next/ (frontend)
+  • Deletar arquivos *.xlsx antigos
+  • Deletar PDFs antigos em boletos/
+
+BACKUP RECOMENDADO:
+  • boletos/ (PDFs baixados)
+  • *.xlsx (resultados)
+  • detran_manual.py (configurações de veículos)
+
+================================================================================
+14. SUPORTE E CONTATO
+================================================================================
+
+DOCUMENTAÇÃO ADICIONAL:
+  • README.md - Visão geral do projeto
+  • COMO_USAR.txt - Guia rápido original
+  • frontend/README.md - Documentação específica do frontend
+  • http://localhost:8000/docs - API docs interativa (Swagger)
+
+LOGS E DEBUG:
+  • Backend: Saída do terminal onde rodou python api_server.py
+  • Frontend: Console do navegador (F12)
+  • Automação: Terminal com detran_manual.py
+
+CONTRIBUIÇÕES:
+  • Fork do repositório
+  • Criar branch para feature
+  • Enviar pull request com descrição detalhada
+
+================================================================================
+15. CHANGELOG (HISTÓRICO DE VERSÕES)
+================================================================================
+
+VERSÃO 1.0.0 (Janeiro 2026)
+─────────────────────────────
+[NOVO] Sistema completo integrado:
+  • Backend FastAPI com 8 endpoints
+  • Frontend Next.js com 5 páginas
+  • Automação Playwright sincronizada
+  • Extração de código de pagamento de PDFs
+  • Sincronização automática de veículos entre backend e frontend
+  • Status em tempo real via polling
+  • Download de Excel e PDFs
+  • Histórico de consultas
+  • Material-UI 6.1.0
+  • Next.js 15.1.0
+  • Correções de segurança (vulnerabilidades reduzidas)
+
+VERSÃO 0.1.0 (Original)
+─────────────────────────
+  • Script detran_manual.py standalone
+  • Consulta via terminal
+  • Geração de Excel básico
+
+================================================================================
+16. LICENÇA E AVISO LEGAL
+================================================================================
+
+TERMOS DE USO:
+  Este sistema foi desenvolvido para fins educacionais e de automação pessoal.
+
+  ⚠ RESPONSABILIDADES:
+  • Use apenas com seus próprios veículos ou com autorização
+  • Respeite os termos de uso do site DETRAN-CE
+  • Não utilize para sobrecarga do sistema (DoS)
+  • O desenvolvedor não se responsabiliza por uso indevido
+  • Dados extraídos são de responsabilidade do usuário
+
+  ⚠ LIMITAÇÕES:
+  • Sistema sujeito a quebras se o site DETRAN-CE mudar
+  • Não há garantia de funcionamento contínuo
+  • PDFs podem ter formatos variados
+
+PRIVACIDADE:
+  • Dados processados localmente (não enviados a terceiros)
+  • Banco em memória não persiste dados ao reiniciar
+  • PDFs e Excel salvos localmente apenas
+
+================================================================================
+
+                    FIM DA DOCUMENTAÇÃO
+             Versão 1.0.0 - Janeiro 2026
+
+       Para dúvidas, consulte http://localhost:8000/docs
+           
+================================================================================

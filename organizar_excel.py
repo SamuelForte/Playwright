@@ -1,211 +1,146 @@
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-import os
 import re
+import os
 
-# Ler o CSV usando pandas diretamente
-csv_file = "_temp_detran.csv"
-df = pd.read_csv(csv_file, encoding='utf-8')
+# ================= LEITURA CSV =================
 
-print(f"DataFrame shape: {df.shape}")
-print(f"Colunas: {list(df.columns)}")
-print(f"Primeiras 3 linhas:")
-print(df.head(3))
+csv_file = "resultado_detran.csv"
 
-# Remover colunas vazias se houver
-df = df.dropna(axis=1, how='all')
+# Verifica se arquivo existe e não está vazio
+if not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0:
+    print(f"⚠️  Arquivo {csv_file} vazio ou não existe. Criando arquivo com cabeçalho...")
+    with open(csv_file, "w", encoding="utf-8") as f:
+        f.write("data_hora,placa,renavam,quantidade_multas,valor_total_multas,descricao_multas\n")
+    print("✅ Arquivo criado com cabeçalho.")
+    exit()
 
-# Se há uma coluna de motivos_multas, vamos separá-la em linhas individuais
-excel_file = "resultado_detran_organizado.xlsx"
+df = pd.read_csv(csv_file, encoding="utf-8-sig", sep=",", engine="python")
 
-# Criar um novo DataFrame organizado
-linhas_novos = []
 
-for idx, row in df.iterrows():
-    data_hora = row['data_hora']
-    placa = row['placa']
-    renavam = row['renavam']
-    quantidade_multas = row['quantidade_multas']
-    ipva = row['ipva']
-    licenciamento = row['licenciamento']
-    valor_total = row.get('valor_total_multas', '')
-    
-    # Se existir coluna de motivos
-    if 'motivos_multas' in df.columns:
-        motivos = row.get('motivos_multas', '')
-        if pd.notna(motivos) and motivos and str(motivos).strip():
-            # Separar os motivos por |
-            motivos_lista = str(motivos).split(' | ')
-            for motivo in motivos_lista:
-                motivo = motivo.strip()
-                
-                # Pular linha TOTAL
-                if 'TOTAL R$' in motivo or not motivo:
-                    continue
-                
-                # Extrair informações do motivo usando regex
-                # Padrão: AIT -- DESCRIÇÃO DATA_INFRACAO VENCIMENTO VALOR_ORIGINAL VALOR_DESCONTO
-                # Exemplo: V607910965 -- TRANSITAR EM... 06/11/2025 30/01/2026 R$ 130,16 R$ 104,13
-                
-                ait = ''
-                descricao = ''
-                data_infracao = ''
-                vencimento = ''
-                valor_original = ''
-                valor_desconto = ''
-                
-                # Extrair AIT (letras + números no início ou após espaço antes de --)
-                match_ait = re.search(r'([A-Z]\d+)\s*--', motivo)
-                if match_ait:
-                    ait = match_ait.group(1)
-                
-                # Extrair datas (formato dd/mm/yyyy)
-                datas = re.findall(r'(\d{2}/\d{2}/\d{4})', motivo)
-                if len(datas) >= 2:
-                    data_infracao = datas[0]
-                    vencimento = datas[1]
-                elif len(datas) == 1:
-                    data_infracao = datas[0]
-                
-                # Extrair valores (R$ xxx,xx)
-                valores = re.findall(r'R\$\s*([\d.,]+)', motivo)
-                if len(valores) >= 2:
-                    valor_original = f"R$ {valores[-2]}"
-                    valor_desconto = f"R$ {valores[-1]}"
-                elif len(valores) == 1:
-                    valor_desconto = f"R$ {valores[0]}"
-                
-                # Extrair descrição (entre -- e a primeira data, ou até encontrar padrão de data)
-                match_desc = re.search(r'--\s*(.+?)\s+\d{2}/\d{2}/\d{4}', motivo)
-                if match_desc:
-                    descricao = match_desc.group(1).strip()
-                else:
-                    # Se não encontrar o padrão com data, pegar tudo após --
-                    match_desc2 = re.search(r'--\s*(.+?)(?:\s+R\$|\s+\d{2}/\d{2}/\d{4}|$)', motivo)
-                    if match_desc2:
-                        descricao = match_desc2.group(1).strip()
-                    else:
-                        # Último recurso: pegar tudo após --
-                        match_desc3 = re.search(r'--\s*(.+)', motivo)
-                        if match_desc3:
-                            descricao = match_desc3.group(1).strip()
-                        else:
-                            descricao = motivo
-                
-                linhas_novos.append({
-                    'Data/Hora Consulta': data_hora,
-                    'Placa': placa,
-                    'Renavam': renavam,
-                    'AIT': ait,
-                    'Descrição da Infração': descricao,
-                    'Data Infração': data_infracao,
-                    'Vencimento': vencimento,
-                    'Valor Original': valor_original,
-                    'Valor com Desconto': valor_desconto,
-                    'IPVA Pendente': ipva,
-                    'Licenciamento Pendente': licenciamento
-                })
-        else:
-            linhas_novos.append({
-                'Data/Hora Consulta': data_hora,
-                'Placa': placa,
-                'Renavam': renavam,
-                'AIT': '-',
-                'Descrição da Infração': 'Sem multas',
-                'Data Infração': '-',
-                'Vencimento': '-',
-                'Valor Original': '-',
-                'Valor com Desconto': '-',
-                'IPVA Pendente': ipva,
-                'Licenciamento Pendente': licenciamento
-            })
+df = df.dropna(axis=1, how="all")
+
+# ================= PROCESSAMENTO =================
+
+linhas = []
+numero = 0
+
+for _, row in df.iterrows():
+    data_hora = row.get("data_hora", "")
+    placa = row.get("placa", "")
+    renavam = row.get("renavam", "")
+    valor_total_csv = row.get("valor_total_multas", 0)
+
+    motivos_raw = str(row.get("motivos_multas", "")).strip()
+
+    if motivos_raw and motivos_raw.lower() != "nenhuma":
+        motivos = [m.strip() for m in motivos_raw.split(" | ") if m.strip()]
     else:
-        linhas_novos.append({
-            'Data/Hora Consulta': data_hora,
-            'Placa': placa,
-            'Renavam': renavam,
-            'AIT': '-',
-            'Descrição da Infração': 'Sem informações',
-            'Data Infração': '-',
-            'Vencimento': '-',
-            'Valor Original': '-',
-            'Valor com Desconto': '-',
-            'IPVA Pendente': ipva,
-            'Licenciamento Pendente': licenciamento
+        motivos = []
+
+    if not motivos:
+        continue
+
+    for motivo in motivos:
+        numero += 1
+        
+        # ================= EXTRAÇÕES =================
+
+        # AIT (letras + números antes do --)
+        ait = "-"
+        match_ait = re.search(r"([A-Z]{1,3}\d{6,})\s*--", motivo)
+        if match_ait:
+            ait = match_ait.group(1)
+
+        # AIT Originária
+        ait_originaria = "-"
+
+        # Datas
+        datas = re.findall(r"\d{2}/\d{2}/\d{4}", motivo)
+        data_infracao = datas[0] if len(datas) > 0 else "-"
+        vencimento = datas[1] if len(datas) > 1 else "-"
+
+        # Valores
+        valores = re.findall(r"R\$\s*([\d.,]+)", motivo)
+        valor = "-"
+        valor_a_pagar = "-"
+
+        if len(valores) == 1:
+            valor = f"R$ {valores[0]}"
+            valor_a_pagar = f"R$ {valores[0]}"
+        elif len(valores) >= 2:
+            valor = f"R$ {valores[-2]}"
+            valor_a_pagar = f"R$ {valores[-1]}"
+
+        # Motivo/Descrição
+        descricao = "-"
+        match_desc = re.search(r"--\s*(.+?)\s+\d{2}/\d{2}/\d{4}", motivo)
+        if match_desc:
+            descricao = match_desc.group(1).strip()
+        else:
+            match_desc = re.search(r"--\s*(.+)", motivo)
+            if match_desc:
+                descricao = match_desc.group(1).strip()
+
+        linhas.append({
+            "#": numero,
+            "AIT": ait,
+            "AIT Originária": ait_originaria,
+            "Motivo": descricao,
+            "Data Infração": data_infracao,
+            "Data Vencimento": vencimento,
+            "Valor": valor,
+            "Valor a Pagar": valor_a_pagar
         })
 
-df_novo = pd.DataFrame(linhas_novos)
+# ================= DATAFRAME FINAL =================
 
-# Salvar em Excel
-df_novo.to_excel(excel_file, sheet_name='Resultado DETRAN', index=False)
+df_final = pd.DataFrame(linhas)
 
-# Formatação no Excel
+excel_file = "resultado_detran_organizado.xlsx"
+df_final.to_excel(excel_file, index=False, sheet_name="Resultado DETRAN")
+
+# ================= FORMATAÇÃO EXCEL =================
+
 wb = openpyxl.load_workbook(excel_file)
 ws = wb.active
 
-# Definir estilos
-header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-header_font = Font(bold=True, color="FFFFFF", size=11)
-center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-left_alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+header_fill = PatternFill("solid", fgColor="1F4E78")
+header_font = Font(bold=True, color="FFFFFF")
+center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+left = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
 border = Border(
-    left=Side(style='thin'),
-    right=Side(style='thin'),
-    top=Side(style='thin'),
-    bottom=Side(style='thin')
+    left=Side(style="thin"),
+    right=Side(style="thin"),
+    top=Side(style="thin"),
+    bottom=Side(style="thin")
 )
 
-# Aplicar formatação ao cabeçalho
 for cell in ws[1]:
     cell.fill = header_fill
     cell.font = header_font
-    cell.alignment = center_alignment
+    cell.alignment = center
     cell.border = border
 
-# Aplicar formatação às linhas
-for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+for row in ws.iter_rows(min_row=2):
     for cell in row:
         cell.border = border
-        # Descrição da Infração alinhada à esquerda
-        if cell.column == 5:  # Coluna E - Descrição
-            cell.alignment = left_alignment
-        else:
-            cell.alignment = center_alignment
+        cell.alignment = left if cell.column == 5 else center
 
-# Ajustar largura das colunas
-column_widths = {
-    'A': 18,  # Data/Hora Consulta
-    'B': 12,  # Placa
-    'C': 15,  # Renavam
-    'D': 14,  # AIT
-    'E': 50,  # Descrição da Infração
-    'F': 14,  # Data Infração
-    'G': 14,  # Vencimento
-    'H': 16,  # Valor Original
-    'I': 16,  # Valor com Desconto
-    'J': 16,  # IPVA Pendente
-    'K': 20   # Licenciamento Pendente
+larguras = {
+    "A": 5, "B": 15, "C": 18, "D": 55,
+    "E": 14, "F": 14, "G": 16, "H": 16
 }
 
-for col, width in column_widths.items():
-    ws.column_dimensions[col].width = width
+for col, w in larguras.items():
+    ws.column_dimensions[col].width = w
 
-# Congelar a primeira linha
 ws.freeze_panes = "A2"
-
-# Salvar
 wb.save(excel_file)
 
-print(f"\n✅ Arquivo Excel organizado: {excel_file}")
-print(f"📊 Total de registros: {len(df_novo)}")
-print(f"🚗 Veículos únicos: {df_novo['Placa'].nunique()}")
-print(f"\n📝 Colunas criadas:")
-for col in df_novo.columns:
-    print(f"   - {col}")
+# ================= RESUMO =================
 
-# Deletar arquivo temporário
-if os.path.exists(csv_file):
-    os.remove(csv_file)
-    print(f"\n🗑️  Arquivo temporário removido: {csv_file}")
-
+print(f"\n✅ Excel gerado com sucesso: {excel_file}")
+print(f"📊 Total de multas: {len(df_final)}")
