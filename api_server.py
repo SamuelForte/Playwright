@@ -54,13 +54,30 @@ class ConsultaStatus(BaseModel):
 
 # ================= FUNÇÕES AUXILIARES =================
 
+def converter_multa_para_frontend(multa_dict: Dict) -> Dict:
+    """Converte dados da planilha (detran_manual.py) para formato do frontend"""
+    return {
+        "placa": multa_dict.get("Placa", "-"),
+        "numero": multa_dict.get("#", 0),
+        "ait": multa_dict.get("AIT", "-"),
+        "ait_originaria": multa_dict.get("AIT Originária", "-"),
+        "motivo": multa_dict.get("Motivo", "-"),
+        "data_infracao": multa_dict.get("Data Infração", "-"),
+        "data_vencimento": multa_dict.get("Data Vencimento", "-"),
+        "valor": multa_dict.get("Valor", "-"),
+        "valor_a_pagar": multa_dict.get("Valor a Pagar", "-"),
+        "orgao_autuador": multa_dict.get("Órgão Autuador", "-"),
+        "codigo_pagamento": multa_dict.get("Código de pagamento em barra", "-")
+    }
+
 def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
     """Processa veículos em background usando Playwright (detran_manual.py)"""
     
     consulta = consultas_db[consulta_id]
     consulta["status"] = "processing"
     
-    todas_multas = []
+    todas_multas = []  # Para Excel (formato original)
+    todas_multas_frontend = []  # Para frontend (formato convertido)
     total_geral = 0.0
     
     try:
@@ -85,13 +102,17 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
                     
                     total, multas = processar_veiculo(browser, veiculo_dict, i)
                     
+                    # Converte multas para formato do frontend
+                    multas_formatadas = [converter_multa_para_frontend(m) for m in multas]
+                    
                     # Atualiza status
                     veiculo_status["status"] = "completed"
                     veiculo_status["multas_count"] = len(multas)
                     veiculo_status["valor_total"] = total
                     veiculo_status["mensagem"] = f"{len(multas)} multa(s) encontrada(s)"
                     
-                    todas_multas.extend(multas)
+                    todas_multas.extend(multas)  # Salva original para Excel
+                    todas_multas_frontend.extend(multas_formatadas)  # Salva formatado para frontend
                     total_geral += total
                     
                 except Exception as e:
@@ -102,23 +123,14 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
             browser.close()
         
         # Salvar Excel usando a função do detran_manual.py
+        # Sempre salva em resultado_detran_organizado.xlsx
         if todas_multas:
-            excel_filename = f"resultado_detran_{consulta_id}.xlsx"
-            
-            # Temporariamente alterar o nome do arquivo
-            import detran_manual
-            original_excel = detran_manual.EXCEL_ARQUIVO
-            detran_manual.EXCEL_ARQUIVO = excel_filename
-            
-            try:
-                salvar_no_excel(todas_multas)
-                consulta["excel_path"] = excel_filename
-            finally:
-                detran_manual.EXCEL_ARQUIVO = original_excel
+            salvar_no_excel(todas_multas)
+            consulta["excel_path"] = detran_manual.EXCEL_ARQUIVO
         
         # Marca consulta como concluída
         consulta["status"] = "completed"
-        consulta["multas"] = todas_multas
+        consulta["multas"] = todas_multas_frontend  # Frontend recebe formato convertido
         consulta["total_multas"] = len(todas_multas)
         consulta["valor_total"] = total_geral
         

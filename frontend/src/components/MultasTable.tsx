@@ -42,9 +42,9 @@ export default function MultasTable({ multas, onDownloadPDF }: MultasTableProps)
   // Filtra multas
   const multasFiltradas = multas.filter(multa => {
     const matchBusca = 
-      multa.placa.toLowerCase().includes(busca.toLowerCase()) ||
-      multa.ait.toLowerCase().includes(busca.toLowerCase()) ||
-      multa.motivo.toLowerCase().includes(busca.toLowerCase());
+      (multa.placa || '').toLowerCase().includes(busca.toLowerCase()) ||
+      (multa.ait || '').toLowerCase().includes(busca.toLowerCase()) ||
+      (multa.motivo || '').toLowerCase().includes(busca.toLowerCase());
     
     const matchOrgao = filtroOrgao === 'todos' || multa.orgao_autuador === filtroOrgao;
 

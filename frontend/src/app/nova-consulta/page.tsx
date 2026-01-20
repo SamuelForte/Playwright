@@ -1,34 +1,25 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Button, Typography, Paper, Alert } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Layout from '@/components/Layout';
-import { Veiculo, iniciarConsulta, obterVeiculosConfig } from '@/lib/api';
+import { Veiculo, iniciarConsulta } from '@/lib/api';
 
 export default function NovaConsulta() {
   const router = useRouter();
-  const [veiculosFixos, setVeiculosFixos] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
-  const [carregandoVeiculos, setCarregandoVeiculos] = useState(true);
 
-  // Busca a lista diretamente do backend (detran_manual.py → VEICULOS)
-  useEffect(() => {
-    const carregar = async () => {
-      try {
-        const data = await obterVeiculosConfig();
-        setVeiculosFixos(data);
-      } catch (error: any) {
-        setErro(error.response?.data?.detail || 'Erro ao carregar veículos configurados');
-      } finally {
-        setCarregandoVeiculos(false);
-      }
-    };
-
-    carregar();
-  }, []);
+  // Lista fixa de veículos (sincronizada com VEICULOS do detran_manual.py)
+  const veiculosFixos = useMemo<Veiculo[]>(
+    () => [
+      { placa: 'SBA7F09', renavam: '01365705622' },
+      { placa: 'TIF1J98', renavam: '01450499292' },
+    ],
+    []
+  );
 
   const handleIniciarConsulta = async () => {
     setErro('');
@@ -64,14 +55,8 @@ export default function NovaConsulta() {
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
           Veículos prontos para consulta
         </Typography>
-        {carregandoVeiculos && (
-          <Typography color="text.secondary">Carregando veículos...</Typography>
-        )}
-        {!carregandoVeiculos && veiculosFixos.length === 0 && (
-          <Typography color="error">Nenhum veículo configurado no backend.</Typography>
-        )}
-        {!carregandoVeiculos && veiculosFixos.map((v) => (
-          <Box key={v.placa} sx={{ display: 'flex', gap: 2, py: 0.5 }}>
+        {veiculosFixos.map((v, index) => (
+          <Box key={`${v.placa}-${v.renavam}-${index}`} sx={{ display: 'flex', gap: 2, py: 0.5 }}>
             <Typography fontWeight={600}>Placa:</Typography>
             <Typography>{v.placa}</Typography>
             <Typography fontWeight={600}>Renavam:</Typography>
@@ -86,7 +71,7 @@ export default function NovaConsulta() {
           size="large"
           startIcon={<PlayArrowIcon />}
           onClick={handleIniciarConsulta}
-          disabled={loading || carregandoVeiculos || veiculosFixos.length === 0}
+          disabled={loading || veiculosFixos.length === 0}
           sx={{ minWidth: 250, py: 1.5 }}
         >
           {loading ? 'Iniciando...' : 'Iniciar Consulta Automática'}
@@ -95,9 +80,7 @@ export default function NovaConsulta() {
 
       <Box sx={{ mt: 2, textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
-          {carregandoVeiculos
-            ? 'Carregando veículos configurados...'
-            : `${veiculosFixos.length} veículo(s) serão consultado(s) automaticamente`}
+          {veiculosFixos.length} veículo(s) serão consultado(s) automaticamente
         </Typography>
       </Box>
     </Layout>

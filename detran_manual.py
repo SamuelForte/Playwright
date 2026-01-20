@@ -22,11 +22,6 @@ INTERVALO_ENTRE_CONSULTAS = 2  # segundos - reduzido de 5
 VEICULOS = [
     {"placa": "SBA7F09", "renavam": "01365705622"},
     {"placa": "TIF1J98", "renavam": "01450499292"},
-    {"placa": "TIF1J99", "renavam": "01450499293"},
-    {"placa": "TIF1J93", "renavam": "01450499295"},
-    {"placa": "TIF1J93", "renavam": "01450499295"},
-    {"placa": "TIF1J93", "renavam": "01450499295"},
-    {"placa": "TIF1J93", "renavam": "01450499295"},
 ]
 
 TIMEOUT_PADRAO = 20000
