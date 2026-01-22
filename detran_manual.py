@@ -308,22 +308,22 @@ def clicar_emitir(page, context, pasta_boletos):
         return None
 
 def extrair_dados_do_pdf(caminho_pdf):
-    """Extrai código de pagamento, órgão autuador e descrição do PDF."""
+    """Extrai código de pagamento, órgão autuador, descrição e datas do PDF."""
     try:
         if not pdfplumber:
             log("⚠️ pdfplumber não está instalado")
-            return "-", "-"
+            return "-", "-", "-", "-"
         
         # Valida se o arquivo existe e é PDF
         if not os.path.exists(caminho_pdf):
             log(f"⚠️ Arquivo não encontrado: {caminho_pdf}")
-            return "-", "-"
+            return "-", "-", "-", "-"
         
         with open(caminho_pdf, 'rb') as f:
             header = f.read(10)
             if not header.startswith(b'%PDF'):
                 log(f"⚠️ Arquivo {caminho_pdf} não é um PDF válido")
-                return "-", "-"
+                return "-", "-", "-", "-"
         
         with pdfplumber.open(caminho_pdf) as pdf:
             texto = ""
@@ -340,6 +340,8 @@ def extrair_dados_do_pdf(caminho_pdf):
             codigo_pagamento = "-"
             descricao_pdf = "-"
             orgao = "-"
+            data_infracao_pdf = "-"
+            vencimento_pdf = "-"
 
             # 1) Extrai código de pagamento - procura por padrão numérico específico
             # Geralmente tem 47 dígitos com barras ou está próximo a "Código de Pagamento"
@@ -402,8 +404,100 @@ def extrair_dados_do_pdf(caminho_pdf):
                             descricao_pdf = proxima_limpa
                             break
                     break
+            
+            # 4) Extrai datas - procura por padrões de data no PDF
+            datas_encontradas = re.findall(r"\d{2}/\d{2}/\d{4}", texto)
+            log(f"📅 Datas encontradas no PDF: {datas_encontradas}")
+            
+            # Exibe contexto das linhas para debug
+            log("📄 Linhas do PDF (primeiras 30):")
+            for idx, l in enumerate(linhas[:30]):
+                log(f"   [{idx}] {l}")
+            
+            # Procura especificamente por "Data da Infração" e "Vencimento"
+            vencimento_encontrado = False
+            for i, linha in enumerate(linhas):
+                linha_low = linha.lower()
+                
+                # Data da Infração - procura na mesma linha ou nas próximas
+                if ("data" in linha_low and "infra" in linha_low) or "cometimento" in linha_low:
+                    # Tenta pegar data da mesma linha primeiro
+                    match_data = re.search(r"\d{2}/\d{2}/\d{4}", linha)
+                    if match_data:
+                        data_infracao_pdf = match_data.group(0)
+                        log(f"📅 Data da Infração encontrada (mesma linha): {data_infracao_pdf}")
+                    else:
+                        # Procura nas próximas linhas
+                        for j, proxima in enumerate(linhas[i+1:i+4]):
+                            match_data = re.search(r"\d{2}/\d{2}/\d{4}", proxima)
+                            if match_data:
+                                data_infracao_pdf = match_data.group(0)
+                                log(f"📅 Data da Infração encontrada (linha +{j+1}): {data_infracao_pdf}")
+                                break
+                
+                # Data de Vencimento - procura especificamente por "vencimento" ou variações
+                # Evita pegar outras datas como "emissão" ou "processamento"
+                if not vencimento_encontrado:
+                    if "vencimento" in linha_low:
+                        # Tenta pegar data da mesma linha primeiro
+                        match_data = re.search(r"\d{2}/\d{2}/\d{4}", linha)
+                        if match_data:
+                            vencimento_pdf = match_data.group(0)
+                            log(f"📅 Vencimento encontrado (mesma linha): {vencimento_pdf}")
+                            vencimento_encontrado = True
+                        else:
+                            # Procura nas próximas linhas
+                            for j, proxima in enumerate(linhas[i+1:i+4]):
+                                match_data = re.search(r"\d{2}/\d{2}/\d{4}", proxima)
+                                if match_data:
+                                    vencimento_pdf = match_data.group(0)
+                                    log(f"📅 Vencimento encontrado (linha +{j+1}): {vencimento_pdf}")
+                                    vencimento_encontrado = True
+                                    break
+            
+            # Se não encontrou vencimento mas encontrou infração, 
+            # usa lógica de pegar a última data (geralmente é o vencimento)
+            if data_infracao_pdf != "-" and vencimento_pdf == "-" and len(datas_encontradas) >= 2:
+                # Filtra datas que são posteriores à data de infração
+                try:
+                    data_inf = datetime.strptime(data_infracao_pdf, "%d/%m/%Y")
+                    datas_posteriores = []
+                    for d in datas_encontradas:
+                        try:
+                            dt = datetime.strptime(d, "%d/%m/%Y")
+                            if dt > data_inf:
+                                datas_posteriores.append(d)
+                        except:
+                            pass
+                    
+                    if datas_posteriores:
+                        # Pega a última data posterior (geralmente é o vencimento final)
+                        vencimento_pdf = datas_posteriores[-1]
+                        log(f"📅 Vencimento determinado (última data posterior): {vencimento_pdf}")
+                except:
+                    pass
+            
+            # Fallback: se ainda não encontrou, usa lógica de comparação simples
+            if (data_infracao_pdf == "-" or vencimento_pdf == "-") and len(datas_encontradas) >= 2:
+                try:
+                    data1 = datetime.strptime(datas_encontradas[0], "%d/%m/%Y")
+                    data2 = datetime.strptime(datas_encontradas[1], "%d/%m/%Y")
+                    
+                    if data1 < data2:
+                        if data_infracao_pdf == "-":
+                            data_infracao_pdf = datas_encontradas[0]
+                        if vencimento_pdf == "-":
+                            vencimento_pdf = datas_encontradas[1]
+                    else:
+                        if data_infracao_pdf == "-":
+                            data_infracao_pdf = datas_encontradas[1]
+                        if vencimento_pdf == "-":
+                            vencimento_pdf = datas_encontradas[0]
+                    log(f"📅 Datas determinadas por comparação (fallback): Infração={data_infracao_pdf}, Vencimento={vencimento_pdf}")
+                except:
+                    pass
 
-            # 4) Combina código de pagamento + descrição na variável final
+            # 5) Combina código de pagamento + descrição na variável final
             resultado_pdf = descricao_pdf
             if codigo_pagamento != "-":
                 if descricao_pdf != "-":
@@ -411,10 +505,10 @@ def extrair_dados_do_pdf(caminho_pdf):
                 else:
                     resultado_pdf = codigo_pagamento
 
-        return orgao, resultado_pdf
+        return orgao, resultado_pdf, data_infracao_pdf, vencimento_pdf
     except Exception as e:
         log(f"⚠️ Erro ao ler PDF: {e}")
-        return "-", "-"
+        return "-", "-", "-", "-"
 
 # ================= PROCESSAMENTO =================
 
@@ -539,8 +633,35 @@ def processar_veiculo(browser, veiculo, indice):
                 
                 # Extrai datas
                 datas = re.findall(r"\d{2}/\d{2}/\d{4}", motivo)
-                data_infracao = datas[0] if len(datas) > 0 else "-"
-                vencimento = datas[1] if len(datas) > 1 else "-"
+                log(f"  🔍 Datas encontradas (ordem): {datas}")
+                
+                # Geralmente vem: [vencimento, data_infracao] - vamos inverter
+                if len(datas) >= 2:
+                    # Assumindo que a primeira data é o vencimento e a segunda é a infração
+                    # Se a primeira data for MAIOR que a segunda, está correto
+                    # Senão, inverte
+                    try:
+                        data1 = datetime.strptime(datas[0], "%d/%m/%Y")
+                        data2 = datetime.strptime(datas[1], "%d/%m/%Y")
+                        
+                        # Se data1 > data2, então data1 é vencimento e data2 é infração
+                        if data1 > data2:
+                            vencimento = datas[0]
+                            data_infracao = datas[1]
+                        else:
+                            # Senão, assume ordem normal
+                            data_infracao = datas[0]
+                            vencimento = datas[1]
+                    except:
+                        # Se falhar o parse, usa ordem padrão
+                        data_infracao = datas[0]
+                        vencimento = datas[1]
+                elif len(datas) == 1:
+                    data_infracao = datas[0]
+                    vencimento = "-"
+                else:
+                    data_infracao = "-"
+                    vencimento = "-"
                 
                 # Extrai valores
                 valores = re.findall(r"R\$\s*([\d.,]+)", motivo)
@@ -599,11 +720,14 @@ def processar_veiculo(browser, veiculo, indice):
             # Emite, baixa o PDF e extrai dados
             orgao_autuador = "-"
             descricao_pdf = "-"
+            data_infracao_pdf = "-"
+            vencimento_pdf = "-"
             caminho_pdf = clicar_emitir(page, context, pasta_boletos)
             if caminho_pdf:
-                orgao_autuador, descricao_pdf = extrair_dados_do_pdf(caminho_pdf)
+                orgao_autuador, descricao_pdf, data_infracao_pdf, vencimento_pdf = extrair_dados_do_pdf(caminho_pdf)
                 log(f"🏢 Órgão Autuador: {orgao_autuador}")
                 log(f"📄 Descrição PDF: {descricao_pdf}")
+                log(f"📅 Datas do PDF - Infração: {data_infracao_pdf}, Vencimento: {vencimento_pdf}")
 
             # Adiciona código PIX na descrição se encontrou
             if codigo_pix != "-":
@@ -616,6 +740,11 @@ def processar_veiculo(browser, veiculo, indice):
             for multa in multas_lista:
                 multa["Órgão Autuador"] = orgao_autuador
                 multa["Código de pagamento em barra"] = descricao_pdf
+                # Atualiza datas com as do PDF se foram encontradas
+                if data_infracao_pdf != "-":
+                    multa["Data Infração"] = data_infracao_pdf
+                if vencimento_pdf != "-":
+                    multa["Data Vencimento"] = vencimento_pdf
         
         return total, multas_lista
 

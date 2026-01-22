@@ -58,8 +58,30 @@ for _, row in df.iterrows():
 
         # Datas
         datas = re.findall(r"\d{2}/\d{2}/\d{4}", motivo)
-        data_infracao = datas[0] if len(datas) > 0 else "-"
-        vencimento = datas[1] if len(datas) > 1 else "-"
+        
+        # Geralmente vem: [vencimento, data_infracao] - vamos inverter
+        if len(datas) >= 2:
+            try:
+                from datetime import datetime
+                data1 = datetime.strptime(datas[0], "%d/%m/%Y")
+                data2 = datetime.strptime(datas[1], "%d/%m/%Y")
+                
+                # Se data1 > data2, então data1 é vencimento e data2 é infração
+                if data1 > data2:
+                    vencimento = datas[0]
+                    data_infracao = datas[1]
+                else:
+                    data_infracao = datas[0]
+                    vencimento = datas[1]
+            except:
+                data_infracao = datas[0]
+                vencimento = datas[1]
+        elif len(datas) == 1:
+            data_infracao = datas[0]
+            vencimento = "-"
+        else:
+            data_infracao = "-"
+            vencimento = "-"
 
         # Valores
         valores = re.findall(r"R\$\s*([\d.,]+)", motivo)

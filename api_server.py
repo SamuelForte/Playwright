@@ -1,13 +1,14 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import uuid
-import asyncio
+import threading
 from datetime import datetime
 import os
 import sys
+import traceback
 
 # Importar funções do detran_manual.py
 import detran_manual
@@ -19,7 +20,7 @@ app = FastAPI(title="DETRAN-CE API", version="1.0.0")
 # CORS para permitir frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,7 +119,8 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
                 except Exception as e:
                     veiculo_status["status"] = "error"
                     veiculo_status["mensagem"] = f"Erro: {str(e)}"
-                    print(f"❌ Erro ao processar {veiculo_data.placa}: {e}")
+                    print(f"❌ Erro ao processar {veiculo_data.placa}:")
+                    print(traceback.format_exc())
             
             browser.close()
         
@@ -140,15 +142,13 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
     except Exception as e:
         consulta["status"] = "error"
         consulta["erro"] = str(e)
-        print(f"❌ Erro na consulta {consulta_id}: {e}")
+        print(f"❌ Erro na consulta {consulta_id}:")
+        print(traceback.format_exc())
 
 # ================= ENDPOINTS =================
 
 @app.post("/consultas")
-async def iniciar_consulta(
-    request: IniciarConsultaRequest, 
-    background_tasks: BackgroundTasks
-):
+async def iniciar_consulta(request: IniciarConsultaRequest):
     """Inicia uma nova consulta de veículos"""
     
     consulta_id = str(uuid.uuid4())
@@ -181,12 +181,13 @@ async def iniciar_consulta(
         "excel_path": None
     }
     
-    # Processa em background
-    background_tasks.add_task(
-        processar_consulta_background, 
-        consulta_id, 
-        request.veiculos
+    # Processa em thread separada (necessário para Playwright no Windows)
+    thread = threading.Thread(
+        target=processar_consulta_background,
+        args=(consulta_id, request.veiculos),
+        daemon=True
     )
+    thread.start()
     
     return {"consulta_id": consulta_id}
 

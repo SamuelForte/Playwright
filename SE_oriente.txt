@@ -1,0 +1,125 @@
+================================================================================
+                    GUIA PARA INICIAR O SISTEMA DETRAN
+================================================================================
+
+Siga este passo a passo para iniciar o sistema do zero.
+
+================================================================================
+1. TERMINAL 1 - BACKEND (FastAPI) - Porta 8000
+================================================================================
+
+Abra um PowerShell e execute:
+
+    cd C:\Users\Samuel\Downloads\detran-main\detran-main
+    .\venv\Scripts\Activate.ps1
+    python api_server.py
+
+Espere até ver a mensagem:
+    INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+
+✅ DEIXE ESTE TERMINAL RODANDO! NÃO FECHE!
+
+================================================================================
+2. TERMINAL 2 - FRONTEND (Next.js) - Porta 3000
+================================================================================
+
+Abra um NOVO PowerShell e execute:
+
+    cd C:\Users\Samuel\Downloads\detran-main\detran-main\frontend
+    npm run dev
+
+Espere até ver a mensagem:
+    ✓ Ready in Xs
+    - Local: http://localhost:3000
+
+✅ DEIXE ESTE TERMINAL RODANDO! NÃO FECHE!
+
+================================================================================
+3. ABRIR O NAVEGADOR
+================================================================================
+
+Opção A - Automático:
+    Abra um NOVO PowerShell e execute:
+    start http://localhost:3000
+
+Opção B - Manual:
+    Abra seu navegador e acesse:
+    http://localhost:3000
+
+================================================================================
+4. USAR O SISTEMA
+================================================================================
+
+1. Você verá a página "Nova Consulta"
+2. Verifique os 2 veículos listados:
+   - SBA7F09 (renavam: 01365705622)
+   - TIF1J98 (renavam: 01450499292)
+3. Clique em "Iniciar Consulta Automática"
+4. Acompanhe o status em tempo real
+5. Quando terminar, veja os resultados na aba "Resultados da Consulta"
+6. Baixe o Excel em "resultado_detran_organizado.xlsx"
+
+================================================================================
+5. PARAR O SISTEMA
+================================================================================
+
+Quando terminar de usar:
+
+- Terminal 1: Pressione Ctrl+C
+- Terminal 2: Pressione Ctrl+C
+
+Ambos os servidores serão desligados.
+
+================================================================================
+6. PRÓXIMAS VEZES
+================================================================================
+
+Sempre que desligar o computador ou encerrar os terminais, repita:
+
+1. Terminal 1: python api_server.py (dentro do venv ativado)
+2. Terminal 2: npm run dev (dentro da pasta frontend)
+3. Navegador: http://localhost:3000
+
+================================================================================
+RESUMO RÁPIDO
+================================================================================
+
+Terminal 1:
+    cd C:\Users\Samuel\Downloads\detran-main\detran-main
+    .\venv\Scripts\Activate.ps1
+    python api_server.py
+
+Terminal 2:
+    cd C:\Users\Samuel\Downloads\detran-main\detran-main\frontend
+    npm run dev
+
+Navegador: http://localhost:3000
+
+✅ PRONTO! Sistema funcionando!
+
+================================================================================
+PORTAS EM USO
+================================================================================
+
+- Backend (FastAPI):  http://localhost:8000
+- Frontend (Next.js): http://localhost:3000
+
+Se alguma porta já estiver em uso, o terminal informará.
+
+================================================================================
+PROBLEMAS COMUNS
+================================================================================
+
+Problema: "localhost recusou estabelecer ligação"
+Solução: Certifique-se de que ambos os terminais estão rodando
+
+Problema: "ModuleNotFoundError: No module named 'fastapi'"
+Solução: Ative o ambiente virtual antes: .\venv\Scripts\Activate.ps1
+
+Problema: "Port 3000 is in use"
+Solução: O frontend usará a porta 3001 automaticamente
+
+Problema: Consulta não inicia
+Solução: Verifique se o backend está rodando com curl http://localhost:8000/health
+
+================================================================================
