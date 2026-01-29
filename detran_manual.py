@@ -17,7 +17,7 @@ except ImportError:
 
 URL = "https://sistemas.detran.ce.gov.br/central"
 EXCEL_ARQUIVO = "resultado_detran_organizado.xlsx"
-INTERVALO_ENTRE_CONSULTAS = 2  # segundos - reduzido de 5
+INTERVALO_ENTRE_CONSULTAS = 0.5  # segundos - otimizado para rapidez
 
 VEICULOS = [
     {"placa": "SBA7F09", "renavam": "01365705622"},
@@ -997,18 +997,74 @@ def processar_veiculo(browser, veiculo, indice):
                 log("⚠️ Não foi possível clicar em 'Ver opções de pagamento'")
                 return total, multas_lista
             
-            # Escolhe a forma de pagamento: BOLETO por padrão
-            forma_pagamento = "boleto"  # Pode mudar para "pix" ou "parcelado"
-            if not escolher_forma_pagamento(page, forma_pagamento):
-                log("⚠️ Não foi possível escolher forma de pagamento")
-                return total, multas_lista
+            # Aguarda a tela de opções carregar
+            page.wait_for_timeout(3000)
             
-            # Aguarda um pouco após clicar no botão de boleto
-            page.wait_for_timeout(2000)
+            # 1) Primeiro, clica em "Copiar Chave Pix" - múltiplos seletores
+            codigo_pix = "-"
+            try:
+                seletores_copiar = [
+                    'button:has-text("Copiar Chave Pix")',
+                    'button:has-text("Copiar")',
+                    'button[class*="btn"]:has-text("Copiar")',
+                    'a:has-text("Copiar Chave Pix")',
+                    'button:text-is("Copiar Chave Pix")',
+                ]
+                
+                botao_encontrado = False
+                for seletor in seletores_copiar:
+                    try:
+                        botao = page.locator(seletor).first
+                        if botao.is_visible(timeout=2000):
+                            botao.click()
+                            log(f"✅ Clicou em 'Copiar Chave Pix' usando seletor: {seletor}")
+                            botao_encontrado = True
+                            page.wait_for_timeout(1500)
+                            break
+                    except:
+                        continue
+                
+                if not botao_encontrado:
+                    log("⚠️ Botão 'Copiar Chave Pix' não encontrado, tentando extrair direto...")
+                
+                # Extrai o código PIX que foi copiado
+                codigo_pix = extrair_codigo_pix_copia_cola(page)
+                
+            except Exception as e:
+                log(f"⚠️ Erro ao clicar em 'Copiar Chave Pix': {e}")
+                codigo_pix = "-"
+            
+            # 2) Depois, clica em "Baixar boleto para pagamento à vista"
+            try:
+                seletores_boleto = [
+                    'button:has-text("Baixar boleto")',
+                    'button:has-text("Baixar boleto para pagamento à vista")',
+                    'button:has-text("para pagamento à vista")',
+                    'a:has-text("Baixar boleto")',
+                ]
+                
+                boleto_clicado = False
+                for seletor in seletores_boleto:
+                    try:
+                        botao = page.locator(seletor).first
+                        if botao.is_visible(timeout=2000):
+                            botao.click()
+                            log(f"💵 Clicou em 'Baixar boleto' usando seletor: {seletor}")
+                            boleto_clicado = True
+                            page.wait_for_timeout(2000)
+                            break
+                    except:
+                        continue
+                
+                if not boleto_clicado:
+                    log("⚠️ Botão 'Baixar boleto' não encontrado")
+                    
+            except Exception as e:
+                log(f"⚠️ Erro ao clicar em 'Baixar boleto': {e}")
             
             # Tenta baixar o boleto como PDF
             orgao_autuador = "-"
-            descricao_pdf = "-"
+            descricao_pdf = codigo_pix if codigo_pix != "-" else "-"
             data_infracao_pdf = "-"
             vencimento_pdf = "-"
             caminho_pdf = None
