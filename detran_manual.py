@@ -189,6 +189,107 @@ def extrair_codigo_pix(page):
 
     log(f"✅ {marcadas} multas selecionadas com sucesso")
 
+def clicar_ver_opcoes_pagamento(page):
+    """Clica no botão verde 'Ver opções de pagamento'"""
+    try:
+        botao_opcoes = page.locator('button:has-text("Ver opções de pagamento")').first
+        botao_opcoes.wait_for(timeout=10000, state="visible")
+        botao_opcoes.click()
+        log("✅ Clicou em 'Ver opções de pagamento'")
+        page.wait_for_timeout(2000)
+        return True
+    except Exception as e:
+        log(f"⚠️ Erro ao clicar em 'Ver opções de pagamento': {e}")
+        return False
+
+def escolher_forma_pagamento(page, forma="pix"):
+    """
+    Escolhe a forma de pagamento na tela de opções.
+    forma: 'pix', 'boleto' ou 'parcelado'
+    """
+    try:
+        if forma.lower() == "pix":
+            # PIX já vem selecionado por padrão, só aguarda carregar
+            log("💳 Pagamento Via PIX selecionado (padrão)")
+            page.wait_for_timeout(2000)
+            return True
+        
+        elif forma.lower() == "boleto":
+            botao_boleto = page.locator('button:has-text("Baixar boleto para pagamento à vista")').first
+            botao_boleto.wait_for(timeout=5000, state="visible")
+            botao_boleto.click()
+            log("💵 Selecionado: Boleto para pagamento à vista")
+            page.wait_for_timeout(2000)
+            return True
+        
+        elif forma.lower() == "parcelado":
+            botao_parcelado = page.locator('button:has-text("Gerar taxa para pagamento parcelado")').first
+            botao_parcelado.wait_for(timeout=5000, state="visible")
+            botao_parcelado.click()
+            log("💳 Selecionado: Pagamento parcelado")
+            page.wait_for_timeout(2000)
+            return True
+        
+        else:
+            log(f"⚠️ Forma de pagamento '{forma}' não reconhecida. Usando PIX.")
+            return True
+            
+    except Exception as e:
+        log(f"⚠️ Erro ao escolher forma de pagamento: {e}")
+        return False
+
+def extrair_codigo_pix_copia_cola(page):
+    """Extrai o código PIX Copia e Cola da nova tela"""
+    try:
+        # Aguarda o QR Code e o código aparecerem
+        page.wait_for_timeout(2000)
+        
+        # Seletor para o campo "Pix Copia e Cola:"
+        seletores_pix = [
+            'input[value*="br.gov.bcb"]',  # Input com código PIX
+            'input[id*="pix"]',
+            'input[name*="pix"]',
+            'code:has-text("br.gov.bcb")',  # Elemento code com o código
+            'pre:has-text("br.gov.bcb")',  # Elemento pre com o código
+            'div:has-text("Pix Copia e Cola:") + input',  # Input logo após o label
+        ]
+        
+        codigo_pix = None
+        
+        for seletor in seletores_pix:
+            try:
+                elemento = page.locator(seletor).first
+                if elemento.is_visible(timeout=2000):
+                    # Se for input, pega o value
+                    if 'input' in seletor:
+                        codigo_pix = elemento.input_value()
+                    else:
+                        # Se for outro elemento, pega o texto
+                        codigo_pix = elemento.inner_text()
+                    
+                    if codigo_pix and len(codigo_pix) > 30:
+                        log(f"💳 Código PIX Copia e Cola extraído ({len(codigo_pix)} caracteres)")
+                        log(f"   Início: {codigo_pix[:50]}...")
+                        return codigo_pix.strip()
+            except:
+                continue
+        
+        # Fallback: procura no texto da página
+        texto_pagina = page.inner_text("body")
+        # Padrão PIX geralmente começa com números e contém br.gov.bcb
+        match = re.search(r'(\d{30,}[^\s]*br\.gov\.bcb[^\s]+)', texto_pagina)
+        if match:
+            codigo_pix = match.group(1)
+            log(f"💳 Código PIX encontrado por regex ({len(codigo_pix)} caracteres)")
+            return codigo_pix.strip()
+        
+        log("⚠️ Código PIX Copia e Cola não encontrado")
+        return "-"
+        
+    except Exception as e:
+        log(f"⚠️ Erro ao extrair código PIX: {e}")
+        return "-"
+
 def clicar_emitir(page, context, pasta_boletos):
     """Clica em Emitir, espera aparecer o botão Baixar Extrato e baixa o PDF."""
     botao_emitir = page.get_by_role("button", name=REGEX_BOTAO_EMITIR)
@@ -891,15 +992,31 @@ def processar_veiculo(browser, veiculo, indice):
             
             marcar_checkboxes_multas(page, indices)
             
-            # Extrai o código PIX ANTES de emitir
-            codigo_pix = extrair_codigo_pix(page)
+            # ========== NOVO FLUXO: Clica em "Ver opções de pagamento" ==========
+            if not clicar_ver_opcoes_pagamento(page):
+                log("⚠️ Não foi possível clicar em 'Ver opções de pagamento'")
+                return total, multas_lista
             
-            # Emite, baixa o PDF e extrai dados
+            # Escolhe a forma de pagamento (pix, boleto ou parcelado)
+            forma_pagamento = "pix"  # Você pode mudar para "boleto" ou "parcelado"
+            if not escolher_forma_pagamento(page, forma_pagamento):
+                log("⚠️ Não foi possível escolher forma de pagamento")
+                return total, multas_lista
+            
+            # Extrai o código PIX Copia e Cola da nova tela
+            codigo_pix = extrair_codigo_pix_copia_cola(page)
+            
+            # Se escolheu boleto, baixa o PDF do boleto
+            # Se escolheu PIX, o código já foi extraído acima
             orgao_autuador = "-"
-            descricao_pdf = "-"
+            descricao_pdf = codigo_pix if codigo_pix != "-" else "-"
             data_infracao_pdf = "-"
             vencimento_pdf = "-"
-            caminho_pdf = clicar_emitir(page, context, pasta_boletos)
+            caminho_pdf = None
+            
+            # Se escolheu boleto, clica para baixar
+            if forma_pagamento == "boleto":
+                caminho_pdf = clicar_emitir(page, context, pasta_boletos)
             if caminho_pdf:
                 orgao_autuador, descricao_pdf, data_infracao_pdf, vencimento_pdf = extrair_dados_do_pdf(caminho_pdf)
                 log(f"🏢 Órgão Autuador: {orgao_autuador}")
