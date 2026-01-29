@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { supabase } from './supabaseClient';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Usar API Routes do Vercel como proxy (no servidor)
+// Em desenvolvimento usa localhost diretamente
+const API_BASE_URL = typeof window === 'undefined' 
+  ? (process.env.BACKEND_URL || 'http://localhost:8000')
+  : (process.env.NEXT_PUBLIC_API_URL || '/api/proxy');
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
