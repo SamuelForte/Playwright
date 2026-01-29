@@ -3,7 +3,7 @@ services:
     name: detran-api
     runtime: python
     buildCommand: pip install -r requirements.txt && playwright install chromium && playwright install-deps
-    startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    startCommand: python app.py
     plan: free
     envVars:
       - key: SUPABASE_URL
