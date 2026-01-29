@@ -997,26 +997,37 @@ def processar_veiculo(browser, veiculo, indice):
                 log("⚠️ Não foi possível clicar em 'Ver opções de pagamento'")
                 return total, multas_lista
             
-            # Escolhe a forma de pagamento (pix, boleto ou parcelado)
-            forma_pagamento = "pix"  # Você pode mudar para "boleto" ou "parcelado"
+            # Escolhe a forma de pagamento: BOLETO por padrão
+            forma_pagamento = "boleto"  # Pode mudar para "pix" ou "parcelado"
             if not escolher_forma_pagamento(page, forma_pagamento):
                 log("⚠️ Não foi possível escolher forma de pagamento")
                 return total, multas_lista
             
-            # Extrai o código PIX Copia e Cola da nova tela
-            codigo_pix = extrair_codigo_pix_copia_cola(page)
+            # Aguarda um pouco após clicar no botão de boleto
+            page.wait_for_timeout(2000)
             
-            # Se escolheu boleto, baixa o PDF do boleto
-            # Se escolheu PIX, o código já foi extraído acima
+            # Tenta baixar o boleto como PDF
             orgao_autuador = "-"
-            descricao_pdf = codigo_pix if codigo_pix != "-" else "-"
+            descricao_pdf = "-"
             data_infracao_pdf = "-"
             vencimento_pdf = "-"
             caminho_pdf = None
             
-            # Se escolheu boleto, clica para baixar
-            if forma_pagamento == "boleto":
-                caminho_pdf = clicar_emitir(page, context, pasta_boletos)
+            # Baixa o boleto em PDF
+            try:
+                # Aguarda o download começar após clicar em "Baixar boleto"
+                with page.expect_download(timeout=30000) as download_info:
+                    log("⏳ Aguardando download do boleto...")
+                    page.wait_for_timeout(3000)
+                
+                download = download_info.value
+                nome_arquivo = download.suggested_filename or f"boleto_{int(time.time())}.pdf"
+                caminho_pdf = os.path.join(pasta_boletos, nome_arquivo)
+                download.save_as(caminho_pdf)
+                log(f"💾 Boleto salvo: {caminho_pdf}")
+            except Exception as e:
+                log(f"⚠️ Erro ao baixar boleto: {e}")
+                caminho_pdf = None
             if caminho_pdf:
                 orgao_autuador, descricao_pdf, data_infracao_pdf, vencimento_pdf = extrair_dados_do_pdf(caminho_pdf)
                 log(f"🏢 Órgão Autuador: {orgao_autuador}")
