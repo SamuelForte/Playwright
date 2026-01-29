@@ -3,7 +3,7 @@ services:
     name: detran-api
     runtime: python
     buildCommand: pip install -r requirements.txt && playwright install chromium && playwright install-deps
-    startCommand: python app.py
+    startCommand: python main.py
     plan: free
     envVars:
       - key: SUPABASE_URL

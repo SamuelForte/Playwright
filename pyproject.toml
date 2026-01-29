@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "detran-api"
+version = "1.0.0"
+description = "API DETRAN-CE"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+py-modules = ["app", "api_server"]
+
+[project.scripts]
+detran-api = "app:app"

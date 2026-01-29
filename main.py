@@ -1,7 +1,5 @@
-"""Entrypoint para Render - Exporta FastAPI app"""
+"""Entrypoint alternativo para Render"""
 from api_server import app
-
-__all__ = ['app']
 
 if __name__ == "__main__":
     import uvicorn
