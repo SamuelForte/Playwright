@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from './supabaseClient';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -172,18 +173,34 @@ export const listarHistorico = async () => {
 
 // ===== Condutores =====
 export const listarCondutores = async () => {
-  const response = await api.get<Condutor[]>('/condutores');
-  return response.data;
+  const { data, error } = await supabase
+    .from('condutores')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as Condutor[];
 };
 
-export const criarCondutor = async (condutor: Condutor) => {
-  const response = await api.post<Condutor>('/condutores', condutor);
-  return response.data;
+export const criarCondutor = async (condutor: Omit<Condutor, 'id'>) => {
+  const { data, error } = await supabase
+    .from('condutores')
+    .insert(condutor)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as Condutor;
 };
 
 export const removerCondutor = async (condutorId: string) => {
-  const response = await api.delete<{ status: string }>(`/condutores/${condutorId}`);
-  return response.data;
+  const { error } = await supabase
+    .from('condutores')
+    .delete()
+    .eq('id', condutorId);
+
+  if (error) throw error;
+  return { status: 'ok' };
 };
 
 // ===== Veículos (registro) =====
@@ -199,8 +216,20 @@ export const salvarVeiculoRegistro = async (veiculo: VeiculoRegistro) => {
 
 // ===== Indicações =====
 export const registrarIndicacao = async (payload: IndicacaoRequest) => {
-  const response = await api.post('/indicacoes', payload);
-  return response.data as { status: string } & IndicacaoRequest & { data_indicacao: string };
+  const { data, error } = await supabase
+    .from('indicacoes')
+    .insert({
+      ait: payload.ait,
+      placa: payload.placa,
+      condutor_id: payload.condutorId,
+      data_indicacao: payload.data_indicacao || new Date().toISOString(),
+      status: 'registrado',
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as { status: string } & IndicacaoRequest & { data_indicacao: string };
 };
 
 // ===== Pagamentos =====

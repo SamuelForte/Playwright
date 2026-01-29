@@ -8,11 +8,11 @@
 frontend/
 │
 ├── 📄 Arquivos de Configuração
-│   ├── package.json          ✅ Dependências (Next.js, MUI, React Query, Axios, XLSX)
+│   ├── package.json          ✅ Dependências (Next.js, MUI, React Query, Axios, XLSX, Supabase JS)
 │   ├── tsconfig.json          ✅ TypeScript configurado
 │   ├── next.config.js         ✅ Configuração Next.js
 │   ├── .eslintrc.json         ✅ ESLint
-│   ├── .env.local             ✅ Variáveis de ambiente (API URL)
+│   ├── .env.local             ✅ Variáveis de ambiente (API URL, Supabase URL/Anon Key)
 │   └── .gitignore             ✅ Arquivos ignorados
 │
 ├── 📚 Documentação
@@ -27,15 +27,17 @@ frontend/
 │   │   └── components/Providers.tsx ✅ React Query + MUI Theme
 │   │
 │   ├── 🔌 API Client
-│   │   └── lib/api.ts         ✅ Axios configurado + interfaces TypeScript
+│   │   ├── lib/api.ts         ✅ Axios (FastAPI) + Supabase (condutores/indicações)
+│   │   └── lib/supabaseClient.ts ✅ Client Supabase compartilhado
 │   │
-│   ├── 🧩 Componentes (7 componentes)
+│   ├── 🧩 Componentes (8 componentes)
 │   │   ├── Layout.tsx         ✅ Header + Navegação + Footer
 │   │   ├── VehicleForm.tsx    ✅ Formulário com validação
 │   │   ├── FileUpload.tsx     ✅ Upload Excel com preview
 │   │   ├── MultasTable.tsx    ✅ Tabela com filtros + paginação
 │   │   ├── ProcessStatus.tsx  ✅ Indicador de status
 │   │   ├── StatusCard.tsx     ✅ Cards do dashboard
+│   │   └── NotificacoesCondutor.tsx ✅ Alerta e ação rápida para indicações
 │   │   └── Providers.tsx      ✅ Wrapper global
 │   │
 │   └── 🖥️ Páginas (6 páginas)
@@ -46,7 +48,8 @@ frontend/
 │       │   ├── nova-consulta/page.tsx ✅ Cadastro + Upload
 │       │   ├── processamento/[id]/page.tsx ✅ Status em tempo real
 │       │   ├── resultados/[id]/page.tsx    ✅ Tabela de multas
-│       │   └── historico/page.tsx          ✅ Lista de consultas
+│       │   ├── historico/page.tsx          ✅ Lista de consultas
+│       │   └── indicacao/page.tsx          ✅ Fluxo de indicação de condutor (Supabase)
 ```
 
 ---

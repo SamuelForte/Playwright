@@ -14,6 +14,8 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import HistoryIcon from '@mui/icons-material/History';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -49,6 +51,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               startIcon={<HistoryIcon />}
             >
               Histórico
+            </Button>
+            <Button
+              color="inherit"
+              component={Link}
+              href="/indicacao"
+              startIcon={<HowToRegIcon />}
+            >
+              Indicação
+            </Button>
+            <Button
+              color="inherit"
+              component={Link}
+              href="/condutor-indicacao"
+              startIcon={<VerifiedUserIcon />}
+            >
+              Responder
             </Button>
           </Box>
         </Toolbar>

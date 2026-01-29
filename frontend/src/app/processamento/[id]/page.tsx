@@ -30,7 +30,7 @@ export default function Processamento() {
   const { data, isError, error } = useQuery({
     queryKey: ['status', consultaId],
     queryFn: () => obterStatus(consultaId),
-    refetchInterval: (data) => {
+    refetchInterval: (data: any) => {
       // Para de atualizar quando completar ou dar erro
       if (!data || data.status === 'completed' || data.status === 'error') {
         return false;

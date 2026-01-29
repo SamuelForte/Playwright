@@ -15,7 +15,17 @@ Isso irá instalar:
 - XLSX (leitura de planilhas)
 - E todas as outras dependências
 
-## Passo 2: Rodar o Frontend
+## Passo 2: Configurar variáveis de ambiente
+
+Edite `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=https://<seu-projeto>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxx
+```
+
+## Passo 3: Rodar o Frontend
 
 ```powershell
 npm run dev
@@ -23,7 +33,7 @@ npm run dev
 
 O frontend estará disponível em: **http://localhost:3000**
 
-## Passo 3: Configurar o Backend (API)
+## Passo 4: Configurar o Backend (API)
 
 Você precisará criar a API FastAPI que o frontend espera. Os endpoints necessários:
 
@@ -85,7 +95,7 @@ async def obter_resultado(consulta_id: str):
     }
 ```
 
-## Passo 4: Rodar o Backend
+## Passo 5: Rodar o Backend
 
 ```powershell
 cd ..  # Voltar para pasta raiz
@@ -113,12 +123,27 @@ Crie um arquivo Excel (.xlsx) com as colunas:
 | SBA7F09 | 01365705622  |
 | TIF1J98 | 01450499292  |
 
-## 🔧 Configuração (Opcional)
+## 🔧 Supabase: tabelas sugeridas
 
-Edite `.env.local` se sua API estiver em outra URL:
+```sql
+create table condutores (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    cpf text not null unique,
+    cnh_categoria text,
+    cnh_vencimento date,
+    pontuacao int,
+    created_at timestamptz default now()
+);
 
-```env
-NEXT_PUBLIC_API_URL=http://seu-servidor:8000
+create table indicacoes (
+    id uuid primary key default gen_random_uuid(),
+    ait text not null,
+    placa text not null,
+    condutor_id uuid references condutores(id),
+    data_indicacao timestamptz default now(),
+    status text default 'registrado'
+);
 ```
 
 ## ✅ Checklist de Integração

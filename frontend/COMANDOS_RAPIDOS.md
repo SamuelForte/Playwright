@@ -69,6 +69,9 @@ npm start
 # Instalar gunicorn (produção)
 pip install gunicorn
 
+# (Opcional) Confirmar Supabase client
+npm install @supabase/supabase-js
+
 # Rodar com gunicorn
 gunicorn api_server:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
@@ -217,8 +220,6 @@ npm list next
 
 ### Adicionar Novo Componente
 
-```powershell
-# Criar arquivo
 cd frontend/src/components
 New-Item MeuComponente.tsx
 
@@ -250,7 +251,6 @@ async def novo_endpoint():
 ### Hot Reload
 
 Ambos frontend e backend têm **hot reload automático**:
-
 - ✅ Frontend: Salve arquivo → atualiza automaticamente
 - ✅ Backend: Salve arquivo → reinicia automaticamente (com --reload)
 

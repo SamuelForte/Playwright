@@ -344,53 +344,47 @@ def extrair_dados_do_pdf(caminho_pdf):
             vencimento_pdf = "-"
 
             # 1) Extrai código de pagamento - procura por padrão numérico específico
-            # Geralmente tem 47 dígitos com barras ou está próximo a "Código de Pagamento"
+            # Geralmente tem 47-48 dígitos em grupos separados por espaços
             for i, linha in enumerate(linhas):
                 linha_limpa = linha.strip()
-                # Procura por código com muitos dígitos (padrão de boleto: 47 dígitos)
-                if re.match(r"^\d{4}\s*\d{4}\s*\d{4}\s*\d{4}", linha_limpa) or \
-                   re.match(r"^\d{11}\s*\d{10}\s*\d{10}\s*\d{16}", linha_limpa) or \
-                   (len(re.sub(r"\D", "", linha_limpa)) >= 40 and "código" in linhas[i-1].lower() if i > 0 else False):
-                    codigo_pagamento = linha_limpa
-                    log(f"💳 Código de Pagamento encontrado: {codigo_pagamento}")
-                    break
-            
-            # 2) Extrai órgão autuador - procura especificamente por "Órgão Autuador" ou "Autuador"
-            for i, linha in enumerate(linhas):
-                linha_low = linha.lower()
-                if "órgão" in linha_low and "autua" in linha_low:
-                    # A próxima linha com conteúdo deve ser o nome do órgão
-                    for proxima in linhas[i+1:]:
-                        proxima_limpa = proxima.strip()
-                        if proxima_limpa and len(proxima_limpa) > 2:
-                            orgao = proxima_limpa
-                            log(f"🏢 Órgão Autuador encontrado: {orgao}")
-                            break
-                    if orgao != "-":
+                apenas_digitos = re.sub(r"\D", "", linha_limpa)
+                
+                # Código de barras tem 47-48 dígitos e geralmente está em linha própria
+                # Não deve conter texto além de números e espaços
+                if len(apenas_digitos) >= 47 and len(apenas_digitos) <= 48:
+                    # Verifica se linha tem pouco texto além de números (evita linhas com descrição)
+                    if len(linha_limpa.replace(" ", "")) == len(apenas_digitos):
+                        codigo_pagamento = linha_limpa
+                        log(f"💳 Código de Pagamento encontrado: {codigo_pagamento}")
                         break
             
-            # Se não encontrou com "Órgão Autuador", tenta procurar por padrões conhecidos
+            # 2) Extrai órgão autuador - NOVA ABORDAGEM: pega da linha da multa
+            # Procura pela linha que contém DETRAN/DEMUTRAN | código | descrição
+            for i, linha in enumerate(linhas):
+                if ("DETRAN" in linha or "DEMUTRAN" in linha) and "|" in linha:
+                    # Extrai o órgão que está antes do primeiro "|"
+                    match_orgao = re.match(r"^([^|]+)", linha)
+                    if match_orgao:
+                        orgao = match_orgao.group(1).strip()
+                        log(f"🏢 Órgão Autuador encontrado (linha da multa): {orgao}")
+                        break
+            
+            # FALLBACK: Se não encontrou na linha da multa, procura por padrões
             if orgao == "-":
                 # Procura por padrões de órgãos específicos
                 padrao_orgaos = [
-                    (r"DEMUTRAN\s+([A-Z\s]+?)(?=\n|$)", "DEMUTRAN"),
+                    (r"DEMUTRAN\s+[A-Z]+", "DEMUTRAN"),
+                    (r"DETRAN-[A-Z]{2}", "DETRAN"),
                     (r"SEMOB", "SEMOB"),
                     (r"POL[IÍ]CIA\s+MILITAR", "PM"),
                     (r"POL[IÍ]CIA\s+FEDERAL", "PF"),
                     (r"POL[IÍ]CIA\s+RODOVI[ÁA]RIA", "PRF"),
-                    (r"EMPRESA\s+DE\s+TRANSPORTE", "Transporte"),
-                    (r"DEPARTAMENTO\s+ESTADUAL", "DETRAN"),
-                    (r"AG[ÊE]NCIA\s+DE\s+TR[ÂA]NSITO", "Trânsito"),
                 ]
                 
                 for pattern, fallback in padrao_orgaos:
                     match = re.search(pattern, texto, re.IGNORECASE)
                     if match:
-                        if "DEMUTRAN" in fallback:
-                            # Extrai o nome completo do DEMUTRAN
-                            orgao = match.group(0).strip()
-                        else:
-                            orgao = fallback
+                        orgao = match.group(0).strip()
                         log(f"🏢 Órgão Autuador encontrado (padrão): {orgao}")
                         break
             
@@ -405,97 +399,122 @@ def extrair_dados_do_pdf(caminho_pdf):
                             break
                     break
             
-            # 4) Extrai datas - procura por padrões de data no PDF
+            # 4) Extrai datas - procura especificamente pela linha da multa com as duas datas
             datas_encontradas = re.findall(r"\d{2}/\d{2}/\d{4}", texto)
             log(f"📅 Datas encontradas no PDF: {datas_encontradas}")
             
             # Exibe contexto das linhas para debug
-            log("📄 Linhas do PDF (primeiras 30):")
-            for idx, l in enumerate(linhas[:30]):
+            log("📄 Linhas do PDF (primeiras 50):")
+            for idx, l in enumerate(linhas[:50]):
                 log(f"   [{idx}] {l}")
             
-            # Procura especificamente por "Data da Infração" e "Vencimento"
+            # MÉTODO PRINCIPAL: Procura pela linha com DETRAN, código da infração e as 2 datas
+            # Exemplo: DETRAN-CE | V607910965 | 07455 | TRANSITAR EM VELOCIDADE 06/11/2025 30/01/2026 130,16 104,13
+            data_infra_encontrada = False
             vencimento_encontrado = False
+            
             for i, linha in enumerate(linhas):
-                linha_low = linha.lower()
+                linha_strip = linha.strip()
                 
-                # Data da Infração - procura na mesma linha ou nas próximas
-                if ("data" in linha_low and "infra" in linha_low) or "cometimento" in linha_low:
-                    # Tenta pegar data da mesma linha primeiro
-                    match_data = re.search(r"\d{2}/\d{2}/\d{4}", linha)
-                    if match_data:
-                        data_infracao_pdf = match_data.group(0)
-                        log(f"📅 Data da Infração encontrada (mesma linha): {data_infracao_pdf}")
-                    else:
-                        # Procura nas próximas linhas
-                        for j, proxima in enumerate(linhas[i+1:i+4]):
-                            match_data = re.search(r"\d{2}/\d{2}/\d{4}", proxima)
-                            if match_data:
-                                data_infracao_pdf = match_data.group(0)
-                                log(f"📅 Data da Infração encontrada (linha +{j+1}): {data_infracao_pdf}")
-                                break
+                # Procura por linha que contenha padrão de multa DETRAN-CE | código | descrição + duas datas
+                if ("DETRAN" in linha or "DEMUTRAN" in linha or "|" in linha) and re.search(r"\d{2}/\d{2}/\d{4}", linha):
+                    # Encontra todas as datas nesta linha específica
+                    datas_na_linha = re.findall(r"\d{2}/\d{2}/\d{4}", linha)
+                    
+                    if len(datas_na_linha) >= 2:
+                        # A primeira data é a infração, a segunda é o vencimento
+                        data_infracao_pdf = datas_na_linha[0]
+                        vencimento_pdf = datas_na_linha[1]
+                        
+                        log(f"✅ LINHA DA MULTA ENCONTRADA [{i}]: {linha_strip}")
+                        log(f"✅ Data Infração: {data_infracao_pdf}")
+                        log(f"✅ Vencimento: {vencimento_pdf}")
+                        
+                        data_infra_encontrada = True
+                        vencimento_encontrado = True
+                        break
+            
+            # MÉTODO ALTERNATIVO 1: Se não encontrou na linha da multa, procura pelos cabeçalhos
+            if not data_infra_encontrada or not vencimento_encontrado:
+                log("⚠️  Método principal não encontrou. Tentando método alternativo com cabeçalhos...")
                 
-                # Data de Vencimento - procura especificamente por "vencimento" ou variações
-                # Evita pegar outras datas como "emissão" ou "processamento"
-                if not vencimento_encontrado:
-                    if "vencimento" in linha_low:
-                        # Tenta pegar data da mesma linha primeiro
-                        match_data = re.search(r"\d{2}/\d{2}/\d{4}", linha)
-                        if match_data:
-                            vencimento_pdf = match_data.group(0)
-                            log(f"📅 Vencimento encontrado (mesma linha): {vencimento_pdf}")
-                            vencimento_encontrado = True
-                        else:
-                            # Procura nas próximas linhas
-                            for j, proxima in enumerate(linhas[i+1:i+4]):
-                                match_data = re.search(r"\d{2}/\d{2}/\d{4}", proxima)
-                                if match_data:
-                                    vencimento_pdf = match_data.group(0)
-                                    log(f"📅 Vencimento encontrado (linha +{j+1}): {vencimento_pdf}")
+                for i, linha in enumerate(linhas):
+                    linha_low = linha.lower().strip()
+                    
+                    # Procura pelo cabeçalho da tabela: "Descrição ... Data Infração Vencimento"
+                    if "data" in linha_low and "infra" in linha_low and "venci" in linha_low:
+                        log(f"🔍 Cabeçalho da tabela encontrado na linha {i}: '{linha}'")
+                        
+                        # A linha seguinte deve conter os dados da multa
+                        for j in range(1, 6):
+                            if i+j < len(linhas):
+                                proxima = linhas[i+j]
+                                datas_na_linha = re.findall(r"\d{2}/\d{2}/\d{4}", proxima)
+                                
+                                # Filtra datas que não são emissão/processamento (geralmente 2025/2026)
+                                if len(datas_na_linha) >= 2:
+                                    data_infracao_pdf = datas_na_linha[0]
+                                    vencimento_pdf = datas_na_linha[1]
+                                    
+                                    log(f"✅ Dados encontrados na linha +{j}: {proxima.strip()}")
+                                    log(f"✅ Data Infração: {data_infracao_pdf}")
+                                    log(f"✅ Vencimento: {vencimento_pdf}")
+                                    
+                                    data_infra_encontrada = True
                                     vencimento_encontrado = True
                                     break
+                        
+                        if data_infra_encontrada:
+                            break
             
-            # Se não encontrou vencimento mas encontrou infração, 
-            # usa lógica de pegar a última data (geralmente é o vencimento)
-            if data_infracao_pdf != "-" and vencimento_pdf == "-" and len(datas_encontradas) >= 2:
-                # Filtra datas que são posteriores à data de infração
-                try:
-                    data_inf = datetime.strptime(data_infracao_pdf, "%d/%m/%Y")
-                    datas_posteriores = []
-                    for d in datas_encontradas:
-                        try:
-                            dt = datetime.strptime(d, "%d/%m/%Y")
-                            if dt > data_inf:
-                                datas_posteriores.append(d)
-                        except:
-                            pass
+            # MÉTODO ALTERNATIVO 2: Usa lógica de ordenação e filtragem de datas
+            if not data_infra_encontrada or not vencimento_encontrado:
+                log("⚠️  Métodos anteriores falharam. Usando lógica de ordenação...")
+                
+                if len(datas_encontradas) >= 2:
+                    try:
+                        # Remove datas de emissão/geração (geralmente a mais recente e a de hoje)
+                        # E remove datas muito antigas (leis/normas)
+                        datas_validas = []
+                        hoje = datetime.now()
+                        
+                        for d in datas_encontradas:
+                            try:
+                                dt = datetime.strptime(d, "%d/%m/%Y")
+                                # Filtra datas entre 2020 e 2030 (período válido para multas)
+                                if 2020 <= dt.year <= 2030:
+                                    datas_validas.append((d, dt))
+                            except:
+                                pass
+                        
+                        # Ordena por data
+                        datas_validas.sort(key=lambda x: x[1])
+                        log(f"📅 Datas válidas ordenadas: {[d[0] for d in datas_validas]}")
+                        
+                        if len(datas_validas) >= 2:
+                            # Infração geralmente é a data mais antiga (quando ocorreu)
+                            # Vencimento é posterior
+                            data_infracao_pdf = datas_validas[0][0]
+                            
+                            # Vencimento: procura uma data que seja posterior à infração
+                            for d, dt in datas_validas[1:]:
+                                if dt > datas_validas[0][1]:
+                                    vencimento_pdf = d
+                                    break
+                            
+                            log(f"🔄 Data Infração: {data_infracao_pdf}")
+                            log(f"🔄 Vencimento: {vencimento_pdf}")
                     
-                    if datas_posteriores:
-                        # Pega a última data posterior (geralmente é o vencimento final)
-                        vencimento_pdf = datas_posteriores[-1]
-                        log(f"📅 Vencimento determinado (última data posterior): {vencimento_pdf}")
-                except:
-                    pass
-            
-            # Fallback: se ainda não encontrou, usa lógica de comparação simples
+                    except Exception as e:
+                        log(f"❌ Erro no método de ordenação: {e}")
+
+            # Fallback final: se ainda não encontrou, usa últimas datas disponíveis
             if (data_infracao_pdf == "-" or vencimento_pdf == "-") and len(datas_encontradas) >= 2:
-                try:
-                    data1 = datetime.strptime(datas_encontradas[0], "%d/%m/%Y")
-                    data2 = datetime.strptime(datas_encontradas[1], "%d/%m/%Y")
-                    
-                    if data1 < data2:
-                        if data_infracao_pdf == "-":
-                            data_infracao_pdf = datas_encontradas[0]
-                        if vencimento_pdf == "-":
-                            vencimento_pdf = datas_encontradas[1]
-                    else:
-                        if data_infracao_pdf == "-":
-                            data_infracao_pdf = datas_encontradas[1]
-                        if vencimento_pdf == "-":
-                            vencimento_pdf = datas_encontradas[0]
-                    log(f"📅 Datas determinadas por comparação (fallback): Infração={data_infracao_pdf}, Vencimento={vencimento_pdf}")
-                except:
-                    pass
+                if data_infracao_pdf == "-":
+                    data_infracao_pdf = datas_encontradas[0]
+                if vencimento_pdf == "-":
+                    vencimento_pdf = datas_encontradas[-1]
+                log(f"📅 Datas determinadas por fallback: Infração={data_infracao_pdf}, Vencimento={vencimento_pdf}")
 
             # 5) Combina código de pagamento + descrição na variável final
             resultado_pdf = descricao_pdf
@@ -510,6 +529,138 @@ def extrair_dados_do_pdf(caminho_pdf):
         log(f"⚠️ Erro ao ler PDF: {e}")
         return "-", "-", "-", "-"
 
+def reprocessar_pdfs_e_atualizar_excel():
+    """Reprocessa todos os PDFs existentes e atualiza o Excel"""
+    log("\n🔄 REPROCESSANDO PDFs EXISTENTES...")
+    
+    # Verifica se existe Excel
+    if not os.path.exists(EXCEL_ARQUIVO):
+        log(f"❌ Arquivo {EXCEL_ARQUIVO} não encontrado!")
+        return
+    
+    # Carrega Excel atual
+    try:
+        df = pd.read_excel(EXCEL_ARQUIVO, engine='openpyxl')
+    except Exception as e:
+        log(f"❌ Erro ao ler Excel: {e}")
+        return
+    
+    log(f"📊 Excel carregado: {len(df)} multas")
+    
+    # Mapeia PDFs por placa
+    pdfs_encontrados = {}
+    pasta_boletos = "boletos"
+    
+    if not os.path.exists(pasta_boletos):
+        log(f"❌ Pasta {pasta_boletos} não encontrada!")
+        return
+    
+    # Busca todos os PDFs
+    for subpasta in os.listdir(pasta_boletos):
+        caminho_subpasta = os.path.join(pasta_boletos, subpasta)
+        if os.path.isdir(caminho_subpasta):
+            for arquivo in os.listdir(caminho_subpasta):
+                if arquivo.endswith('.pdf'):
+                    caminho_completo = os.path.join(caminho_subpasta, arquivo)
+                    # Tenta extrair placa do nome do arquivo (Extrato_6601163057.pdf)
+                    # Na verdade, vamos processar todos os PDFs e associar pela data
+                    pdfs_encontrados[caminho_completo] = None
+    
+    log(f"📄 Encontrados {len(pdfs_encontrados)} PDFs")
+    
+    # Contador de atualizações
+    atualizados = 0
+    
+    # Para cada PDF, extrai dados
+    for caminho_pdf in pdfs_encontrados.keys():
+        log(f"\n📑 Processando: {os.path.basename(caminho_pdf)}")
+        
+        orgao, codigo_barras, data_infracao, data_vencimento = extrair_dados_do_pdf(caminho_pdf)
+        
+        if orgao == "-" and codigo_barras == "-":
+            log(f"⚠️ Nenhum dado extraído de {os.path.basename(caminho_pdf)}")
+            continue
+        
+        log(f"   Órgão: {orgao}")
+        log(f"   Código: {codigo_barras[:50]}..." if len(codigo_barras) > 50 else f"   Código: {codigo_barras}")
+        log(f"   Data Infração: {data_infracao}")
+        log(f"   Data Vencimento: {data_vencimento}")
+        
+        # Procura no Excel pela data de vencimento ou data de infração
+        # Como não temos identificador único, vamos atualizar todas as linhas com órgão vazio
+        # e que tenham datas próximas ou vazias
+        
+        for idx in df.index:
+            # Se órgão já está preenchido, pula
+            if pd.notna(df.loc[idx, "Órgão Autuador"]) and df.loc[idx, "Órgão Autuador"] != "-":
+                continue
+            
+            # Se código já está preenchido, pula
+            if pd.notna(df.loc[idx, "Código de pagamento em barra"]) and df.loc[idx, "Código de pagamento em barra"] != "-":
+                continue
+            
+            # Atualiza primeira linha vazia encontrada
+            df.loc[idx, "Órgão Autuador"] = orgao
+            df.loc[idx, "Código de pagamento em barra"] = codigo_barras
+            
+            if data_infracao != "-":
+                df.loc[idx, "Data Infração"] = data_infracao
+            if data_vencimento != "-":
+                df.loc[idx, "Data Vencimento"] = data_vencimento
+            
+            atualizados += 1
+            log(f"   ✅ Atualizado linha {idx + 2}")  # +2 porque índice começa em 0 e tem cabeçalho
+            break  # Atualiza apenas 1 linha por PDF
+    
+    # Salva Excel atualizado
+    if atualizados > 0:
+        try:
+            df.to_excel(EXCEL_ARQUIVO, index=False, sheet_name="Resultado DETRAN", engine='openpyxl')
+            log(f"\n✅ Excel atualizado com sucesso! {atualizados} multas atualizadas")
+            
+            # Aplica formatação
+            try:
+                wb = openpyxl.load_workbook(EXCEL_ARQUIVO)
+                ws = wb.active
+                
+                # Formata cabeçalho
+                for cell in ws[1]:
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                
+                # Bordas
+                thin_border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+                    for cell in row:
+                        cell.border = thin_border
+                
+                # Congela primeira linha
+                ws.freeze_panes = "A2"
+                
+                # Ajusta largura
+                for col in ws.columns:
+                    max_length = 0
+                    column = col[0].column_letter
+                    for cell in col:
+                        if cell.value:
+                            max_length = max(max_length, len(str(cell.value)))
+                    ws.column_dimensions[column].width = min(max_length + 2, 50)
+                
+                wb.save(EXCEL_ARQUIVO)
+                log("✅ Formatação aplicada")
+            except Exception as e:
+                log(f"⚠️ Erro ao formatar Excel: {e}")
+        except Exception as e:
+            log(f"❌ Erro ao salvar Excel: {e}")
+    else:
+        log("\n⚠️ Nenhuma multa foi atualizada")
+
 # ================= PROCESSAMENTO =================
 
 def extrair_pendencias(texto):
@@ -522,7 +673,19 @@ def salvar_no_excel(multas_lista):
         log("⚠️ Nenhuma multa para salvar")
         return
     
+    # Define a ordem correta das colunas
+    colunas_ordem = [
+        "Placa", "#", "AIT", "AIT Originária", "Motivo", 
+        "Data Infração", "Data Vencimento", "Valor", "Valor a Pagar", 
+        "Órgão Autuador", "Código de pagamento em barra"
+    ]
+    
     df_novo = pd.DataFrame(multas_lista)
+    
+    # Reordena as colunas para garantir ordem correta
+    # Inclui apenas colunas que existem no DataFrame
+    colunas_existentes = [col for col in colunas_ordem if col in df_novo.columns]
+    df_novo = df_novo[colunas_existentes]
     
     try:
         # Tenta fechar arquivo se estiver aberto
@@ -566,9 +729,23 @@ def salvar_no_excel(multas_lista):
         for row in ws.iter_rows(min_row=2):
             for cell in row:
                 cell.border = border
+                # Coluna E (Motivo) e K (Código barras) ficam alinhadas à esquerda
                 cell.alignment = left if cell.column in (5, 11) else center
         
-        larguras = {"A": 12, "B": 5, "C": 15, "D": 18, "E": 55, "F": 14, "G": 14, "H": 16, "I": 16, "J": 18, "K": 55}
+        # Define largura das colunas
+        larguras = {
+            "A": 12,  # Placa
+            "B": 5,   # #
+            "C": 15,  # AIT
+            "D": 18,  # AIT Originária
+            "E": 55,  # Motivo
+            "F": 14,  # Data Infração
+            "G": 14,  # Data Vencimento
+            "H": 16,  # Valor
+            "I": 16,  # Valor a Pagar
+            "J": 18,  # Órgão Autuador
+            "K": 55   # Código de pagamento em barra
+        }
         for col, w in larguras.items():
             ws.column_dimensions[col].width = w
         
@@ -736,8 +913,13 @@ def processar_veiculo(browser, veiculo, indice):
                 else:
                     descricao_pdf = codigo_pix
 
-            # Adiciona dados a todas as multas processadas
-            for multa in multas_lista:
+            # Atualiza APENAS as multas deste grupo (últimas N multas adicionadas)
+            # Usa len(indices) para saber quantas multas foram processadas
+            quantidade_multas_grupo = len(indices)
+            indice_inicio = len(multas_lista) - quantidade_multas_grupo
+            
+            for j in range(indice_inicio, len(multas_lista)):
+                multa = multas_lista[j]
                 multa["Órgão Autuador"] = orgao_autuador
                 multa["Código de pagamento em barra"] = descricao_pdf
                 # Atualiza datas com as do PDF se foram encontradas

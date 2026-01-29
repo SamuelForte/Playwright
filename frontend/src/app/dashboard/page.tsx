@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInCalendarDays, addDays, parse, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
 import { 
   Grid, Typography, Box, Paper, Button, TextField, Dialog,
@@ -20,13 +21,8 @@ import ClearIcon from '@mui/icons-material/Clear';
 import ErrorIcon from '@mui/icons-material/Error';
 import Layout from '@/components/Layout';
 import StatusCard from '@/components/StatusCard';
-import { Veiculo } from '@/lib/api';
-
-interface Condutor {
-  id: string;
-  nome: string;
-  cpf: string;
-}
+import NotificacoesCondutor from '@/components/NotificacoesCondutor';
+import { Condutor, Veiculo, criarCondutor, listarCondutores, removerCondutor } from '@/lib/api';
 
 interface VeiculoComCondutor extends Veiculo {
   condutorId?: string;
@@ -56,11 +52,25 @@ export default function Dashboard() {
 
   const [abaSelecionada, setAbaSelecionada] = useState(0);
 
-  const [condutores, setCondutores] = useState<Condutor[]>([]);
   const [veiculos, setVeiculos] = useState<VeiculoComCondutor[]>([
     { placa: 'SBA7F09', renavam: '01365705622' },
     { placa: 'TIF1J98', renavam: '01450499292' },
   ]);
+
+  const queryClient = useQueryClient();
+  const condutoresQuery = useQuery({
+    queryKey: ['condutores'],
+    queryFn: listarCondutores,
+  });
+  const criarCondutorMutation = useMutation({
+    mutationFn: criarCondutor,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['condutores'] }),
+  });
+  const removerCondutorMutation = useMutation({
+    mutationFn: removerCondutor,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['condutores'] }),
+  });
+  const condutores = condutoresQuery.data || [];
 
   const [indicacaoPrazo, setIndicacaoPrazo] = useState<Record<string, { notificacao: Date; prazo: Date }>>({});
 
@@ -172,11 +182,6 @@ export default function Dashboard() {
     }
 
     // Carregar condutores do localStorage
-    const condutoresSalvos = localStorage.getItem('condutores');
-    if (condutoresSalvos) {
-      setCondutores(JSON.parse(condutoresSalvos));
-    }
-
     // Carregar multas e contar
     const multasSalvasRaw = localStorage.getItem('ultimas_multas');
     let totalMultas = 0;
@@ -258,25 +263,29 @@ export default function Dashboard() {
       return;
     }
 
-    const novoCondutor: Condutor = {
-      id: Date.now().toString(),
-      nome: novoCondutorNome,
-      cpf: novoCondutorCPF
-    };
-
-    const condutoresAtualizados = [...condutores, novoCondutor];
-    setCondutores(condutoresAtualizados);
-    localStorage.setItem('condutores', JSON.stringify(condutoresAtualizados));
-
-    setNovoCondutorNome('');
-    setNovoCondutorCPF('');
-    setOpenDialogCondutor(false);
+    criarCondutorMutation.mutate(
+      { nome: novoCondutorNome.trim(), cpf: novoCondutorCPF.trim() },
+      {
+        onSuccess: () => {
+          setNovoCondutorNome('');
+          setNovoCondutorCPF('');
+          setOpenDialogCondutor(false);
+        },
+        onError: (e: any) => {
+          const msg = e?.message || e?.error?.message || 'Erro ao salvar condutor';
+          alert(msg);
+        },
+      }
+    );
   };
 
   const handleDeleteCondutor = (id: string) => {
-    const condutoresAtualizados = condutores.filter(c => c.id !== id);
-    setCondutores(condutoresAtualizados);
-    localStorage.setItem('condutores', JSON.stringify(condutoresAtualizados));
+    removerCondutorMutation.mutate(id, {
+      onError: (e: any) => {
+        const msg = e?.message || e?.error?.message || 'Erro ao remover condutor';
+        alert(msg);
+      },
+    });
   };
 
   const handleAddVeiculo = () => {
@@ -423,6 +432,13 @@ export default function Dashboard() {
         </Grid>
       </Grid>
 
+      {/* Notificações de Multas para Condutores */}
+      <NotificacoesCondutor 
+        condutores={condutores}
+        veiculos={veiculos}
+        multas={multas}
+      />
+
       {/* Alerta de Multas Vencendo em Breve */}
       {multasVencendoEmBreve.length > 0 && (
         <Paper elevation={3} sx={{ p: 3, mb: 4, backgroundColor: '#ffebee', borderLeft: '4px solid #d32f2f' }}>
@@ -525,7 +541,7 @@ export default function Dashboard() {
 
             {veiculos.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                Nenhum veículo cadastrado. Clique em "Adicionar Veículo" para começar.
+                Nenhum veículo cadastrado. Clique em &quot;Adicionar Veículo&quot; para começar.
               </Typography>
             ) : (
               <TableContainer>
@@ -597,7 +613,7 @@ export default function Dashboard() {
 
             {condutores.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                Nenhum condutor cadastrado. Clique em "Adicionar Condutor" para começar.
+                Nenhum condutor cadastrado. Clique em &quot;Adicionar Condutor&quot; para começar.
               </Typography>
             ) : (
               <TableContainer>

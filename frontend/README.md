@@ -8,7 +8,8 @@ Front-end completo para o sistema de consulta de multas do DETRAN-CE.
 - **TypeScript** - Tipagem estática
 - **Material-UI (MUI)** - Componentes de UI
 - **React Query** - Gerenciamento de estado e cache
-- **Axios** - Cliente HTTP
+- **Axios** - Cliente HTTP (para API FastAPI)
+- **Supabase JS** - Persistência de condutores/indicações
 - **XLSX** - Leitura e manipulação de planilhas Excel
 
 ## 📋 Funcionalidades
@@ -40,8 +41,10 @@ cd frontend
 npm install
 
 # Configurar variáveis de ambiente
-# Edite o arquivo .env.local com a URL da sua API
+# Edite o arquivo .env.local
 # NEXT_PUBLIC_API_URL=http://localhost:8000
+# NEXT_PUBLIC_SUPABASE_URL=https://<seu-projeto>.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxx
 
 # Rodar em desenvolvimento
 npm run dev
@@ -53,20 +56,21 @@ npm run build
 npm start
 ```
 
-## 🔌 Integração com Backend
+## 🔌 Integração com Backend (FastAPI) e Supabase
 
-O frontend espera que a API FastAPI esteja rodando em `http://localhost:8000` com os seguintes endpoints:
+- **FastAPI (http://localhost:8000)**: apenas para consultas Playwright
+- **Supabase**: condutores e indicações são persistidos direto pelo frontend
+
+### Endpoints FastAPI necessários
 
 ### Endpoints Necessários
 
-```typescript
-POST   /consultas                    // Iniciar nova consulta
-GET    /consultas/{id}/status        // Obter status da consulta
-GET    /consultas/{id}/resultado     // Obter resultado completo
-GET    /consultas/{id}/excel         // Baixar Excel
+POST   /consultas                     // Iniciar nova consulta
+GET    /consultas/{id}/status         // Obter status da consulta
+GET    /consultas/{id}/resultado      // Obter resultado completo
+GET    /consultas/{id}/excel          // Baixar Excel
 GET    /consultas/{id}/pdf/{filename} // Baixar PDF individual
-GET    /consultas/historico          // Listar histórico
-```
+GET    /consultas/historico           // Listar histórico
 
 ### Estrutura de Dados Esperada
 
@@ -114,6 +118,32 @@ GET    /consultas/historico          // Listar histórico
   "codigo_pagamento": "856300000010..."
 }
 ```
+
+### Supabase (tabelas sugeridas)
+
+```sql
+create table condutores (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  cpf text not null unique,
+  cnh_categoria text,
+  cnh_vencimento date,
+  pontuacao int,
+  created_at timestamptz default now()
+);
+
+create table indicacoes (
+  id uuid primary key default gen_random_uuid(),
+  ait text not null,
+  placa text not null,
+  condutor_id uuid references condutores(id),
+  data_indicacao timestamptz default now(),
+  status text default 'registrado'
+);
+```
+
+- Variáveis no `.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Persistência de condutores/indicações via `src/lib/api.ts` com Supabase client
 
 ## 🎨 Características de UX/UI
 

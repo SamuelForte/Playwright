@@ -107,7 +107,7 @@ export default function Historico() {
               consultas.map((consulta) => (
                 <TableRow key={consulta.id} hover>
                   <TableCell>{formatarData(consulta.created_at)}</TableCell>
-                  <TableCell>{consulta.veiculos.length}</TableCell>
+                  <TableCell>{consulta.veiculos?.length || 0}</TableCell>
                   <TableCell>{consulta.total_multas}</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>
                     {formatarValor(consulta.valor_total)}

@@ -5,8 +5,44 @@ Este guia mostra como integrar o frontend Next.js com o código Python existente
 ## 📋 Arquitetura
 
 ```
-Frontend (Next.js)  →  API (FastAPI)  →  Automação (Playwright)
-    :3000                 :8000              detran_manual.py
+Frontend (Next.js)  →  Supabase (condutores/indicações)
+                  →  API (FastAPI)  →  Automação (Playwright)
+       :3000           SaaS               :8000            detran_manual.py
+```
+
+## 🔌 Endpoints e dados
+
+**FastAPI (consultas Playwright)**
+- POST /consultas
+- GET  /consultas/{id}/status
+- GET  /consultas/{id}/resultado
+- GET  /consultas/{id}/excel
+- GET  /consultas/{id}/pdf/{filename}
+- GET  /consultas/historico
+
+**Supabase (condutores/indicações) - chamado direto pelo frontend**
+- Variáveis `.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Tabelas sugeridas:
+
+```sql
+create table condutores (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    cpf text not null unique,
+    cnh_categoria text,
+    cnh_vencimento date,
+    pontuacao int,
+    created_at timestamptz default now()
+);
+
+create table indicacoes (
+    id uuid primary key default gen_random_uuid(),
+    ait text not null,
+    placa text not null,
+    condutor_id uuid references condutores(id),
+    data_indicacao timestamptz default now(),
+    status text default 'registrado'
+);
 ```
 
 ## 🛠️ Criar API FastAPI
@@ -72,16 +108,6 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
     """Processa veículos em background usando Playwright"""
     
     consulta = consultas_db[consulta_id]
-    consulta["status"] = "processing"
-    
-    todas_multas = []
-    total_geral = 0.0
-    
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            
-            for i, veiculo_data in enumerate(veiculos, 1):
                 # Atualiza status do veículo
                 veiculo_status = next(
                     v for v in consulta["veiculos"] 
