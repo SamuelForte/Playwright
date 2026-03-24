@@ -16,10 +16,10 @@ load_dotenv()
 
 from supabase import create_client, Client
 
-# Importar funções do detran_manual.py
+# Importar módulos de scraping e Excel
 import detran_manual
-from detran_manual import processar_veiculo, salvar_no_excel
-from playwright.sync_api import sync_playwright
+from detran_manual import salvar_no_excel
+import detran_scraper
 
 app = FastAPI(title="DETRAN-CE API", version="1.0.0")
 
@@ -248,9 +248,9 @@ def db_insert_multas(consulta_id: str, multas: List[Dict]):
             "motivo": m.get("Motivo") or m.get("motivo") or "-",
             "data_infracao": m.get("Data Infração") or m.get("data_infracao") or "-",
             "data_vencimento": m.get("Data Vencimento") or m.get("data_vencimento") or "-",
-            "valor": m.get("Valor") or m.get("valor") or "-",
+            "valor": m.get("Valor") or m.get("valor") or m.get("valor_original") or "-",
             "valor_a_pagar": m.get("Valor a Pagar") or m.get("valor_a_pagar") or "-",
-            "orgao_autuador": m.get("Órgão Autuador") or m.get("orgao_autuador") or "-",
+            "orgao_autuador": m.get("Órgão Autuador") or m.get("orgao_autuador") or m.get("orgao") or "-",
             "codigo_pagamento": m.get("Código de pagamento em barra") or m.get("codigo_pagamento") or "-",
         })
 
@@ -362,81 +362,95 @@ def converter_multa_para_frontend(multa_dict: Dict) -> Dict:
         "codigo_pagamento": multa_dict.get("Código de pagamento em barra", "-")
     }
 
+def _multa_para_excel(multa: Dict, placa: str, numero: int) -> Dict:
+    """Converte formato do scraper para o formato esperado por salvar_no_excel."""
+    return {
+        "Placa": placa,
+        "#": numero,
+        "AIT": multa.get("ait", "-"),
+        "AIT Originária": multa.get("ait_originaria", "-"),
+        "Motivo": multa.get("motivo", "-"),
+        "Data Infração": multa.get("data_infracao", "-"),
+        "Data Vencimento": multa.get("data_vencimento", "-"),
+        "Valor": multa.get("valor_original", "-"),
+        "Valor a Pagar": multa.get("valor_a_pagar", "-"),
+        "Órgão Autuador": multa.get("orgao", "-"),
+        "Código de pagamento em barra": "-",
+    }
+
+
 def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
-    """Processa veículos em background usando Playwright (detran_manual.py)"""
+    """Processa veículos em background usando requests + BeautifulSoup."""
     total_geral = 0.0
-    todas_multas_original = []  # Para Excel
+    todas_multas_excel = []  # formato capital para salvar_no_excel
 
     try:
-        # Marca consulta como processing
         db_update_consulta_status(consulta_id, "processing")
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            
-            for i, veiculo_data in enumerate(veiculos, 1):
-                # Atualiza status do veículo para processing
-                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                    "status": "processing",
-                    "mensagem": "Consultando DETRAN-CE...",
-                })
+        for veiculo_data in veiculos:
+            db_update_veiculo_status(consulta_id, veiculo_data.placa, {
+                "status": "processing",
+                "mensagem": "Consultando DETRAN-CE...",
+            })
 
-                try:
-                    # Chama a função processar_veiculo do detran_manual.py
-                    veiculo_dict = {
-                        "placa": veiculo_data.placa,
-                        "renavam": veiculo_data.renavam
-                    }
-                    
-                    total, multas = processar_veiculo(browser, veiculo_dict, i)
-                    multas_formatadas = [converter_multa_para_frontend(m) for m in multas]
+            try:
+                resultado = detran_scraper.consultar_multas(
+                    veiculo_data.placa, veiculo_data.renavam
+                )
 
-                    # Atualiza status do veículo
-                    db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                        "status": "completed",
-                        "multas_count": len(multas),
-                        "valor_total": total,
-                        "mensagem": f"{len(multas)} multa(s) encontrada(s)",
-                    })
-
-                    # Persiste multas
-                    db_insert_multas(consulta_id, multas)
-
-                    todas_multas_original.extend(multas)
-                    total_geral += total
-                    
-                except Exception as e:
+                if resultado.get("erro"):
                     db_update_veiculo_status(consulta_id, veiculo_data.placa, {
                         "status": "error",
-                        "mensagem": f"Erro: {str(e)}",
+                        "mensagem": resultado["erro"],
                     })
-                    print(f"❌ Erro ao processar {veiculo_data.placa}:")
-                    print(traceback.format_exc())
-            
-            browser.close()
-        
-        # Salvar Excel usando a função do detran_manual.py
-        if todas_multas_original:
-            salvar_no_excel(todas_multas_original)
+                    continue
+
+                multas = resultado["multas"]
+                valor_veiculo = sum(m.get("valor_numerico", 0.0) for m in multas)
+
+                # Adiciona placa a cada multa para o banco
+                multas_com_placa = [{**m, "placa": veiculo_data.placa} for m in multas]
+                db_insert_multas(consulta_id, multas_com_placa)
+
+                # Converte para formato Excel
+                for i, m in enumerate(multas, 1):
+                    todas_multas_excel.append(_multa_para_excel(m, veiculo_data.placa, i))
+
+                total_geral += valor_veiculo
+                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
+                    "status": "completed",
+                    "multas_count": len(multas),
+                    "valor_total": valor_veiculo,
+                    "mensagem": f"{len(multas)} multa(s) encontrada(s)",
+                })
+
+            except Exception as e:
+                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
+                    "status": "error",
+                    "mensagem": f"Erro: {str(e)}",
+                })
+                print(f"Erro ao processar {veiculo_data.placa}:")
+                print(traceback.format_exc())
+
+        if todas_multas_excel:
+            salvar_no_excel(todas_multas_excel)
             excel_path = detran_manual.EXCEL_ARQUIVO
         else:
             excel_path = None
 
-        # Marca consulta como concluída com totais
         db_update_consulta_status(
             consulta_id,
             status="completed",
             excel_path=excel_path,
-            total_multas=len(todas_multas_original),
+            total_multas=len(todas_multas_excel),
             valor_total=total_geral,
         )
-        
-        print(f"✅ Consulta {consulta_id} concluída com sucesso!")
-        print(f"📊 Total: {len(todas_multas_original)} multas | R$ {total_geral:.2f}")
-        
+
+        print(f"Consulta {consulta_id} concluída: {len(todas_multas_excel)} multas | R$ {total_geral:.2f}")
+
     except Exception:
         db_update_consulta_status(consulta_id, "error")
-        print(f"❌ Erro na consulta {consulta_id}:")
+        print(f"Erro na consulta {consulta_id}:")
         print(traceback.format_exc())
 
 # ================= ENDPOINTS =================
