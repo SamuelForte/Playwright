@@ -8,7 +8,7 @@ const isLocalBrowser =
 
 const API_BASE_URL = !isBrowser
   ? (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
-  : (process.env.NEXT_PUBLIC_API_URL || (isLocalBrowser ? 'http://localhost:8000' : ''));
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -17,13 +17,7 @@ export const api = axios.create({
   },
 });
 
-const API_FALLBACK_URL = process.env.NEXT_PUBLIC_API_URL || (isLocalBrowser ? 'http://localhost:8000' : '');
-
-const ensureApiUrl = () => {
-  if (isBrowser && !API_BASE_URL) {
-    throw new Error('API não configurada. Defina NEXT_PUBLIC_API_URL para o frontend publicado.');
-  }
-};
+const API_FALLBACK_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface Veiculo {
   placa: string;
@@ -128,23 +122,17 @@ export interface DebitoResumo {
 
 // Obter veículos configurados no backend (detran_manual.py)
 export const obterVeiculosConfig = async () => {
-  ensureApiUrl();
   const response = await api.get<Veiculo[]>('/config/veiculos');
   return response.data;
 };
 
 // Iniciar nova consulta
 export const iniciarConsulta = async (veiculos: Veiculo[]) => {
-  ensureApiUrl();
   try {
     const response = await api.post<{ consulta_id: string }>('/consultas', { veiculos });
     return response.data;
   } catch (proxyError) {
     if (typeof window === 'undefined') {
-      throw proxyError;
-    }
-
-    if (!API_FALLBACK_URL) {
       throw proxyError;
     }
 
@@ -159,16 +147,11 @@ export const iniciarConsulta = async (veiculos: Veiculo[]) => {
 
 // Obter status da consulta
 export const obterStatus = async (consultaId: string) => {
-  ensureApiUrl();
   try {
     const response = await api.get<ConsultaStatus>(`/consultas/${consultaId}/status`);
     return response.data;
   } catch (proxyError) {
     if (typeof window === 'undefined') {
-      throw proxyError;
-    }
-
-    if (!API_FALLBACK_URL) {
       throw proxyError;
     }
 
@@ -179,16 +162,11 @@ export const obterStatus = async (consultaId: string) => {
 
 // Obter resultado da consulta
 export const obterResultado = async (consultaId: string) => {
-  ensureApiUrl();
   try {
     const response = await api.get<ConsultaResultado>(`/consultas/${consultaId}/resultado`);
     return response.data;
   } catch (proxyError) {
     if (typeof window === 'undefined') {
-      throw proxyError;
-    }
-
-    if (!API_FALLBACK_URL) {
       throw proxyError;
     }
 
