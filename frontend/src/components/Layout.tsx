@@ -25,7 +25,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setBasePath(pathname.startsWith('/Playwright') ? '/Playwright' : '');
   }, []);
 
-  const withBasePath = (path: string) => `${basePath}${path}`;
+  const withBasePath = (path: string) => {
+    const normalized = path.endsWith('/') ? path : `${path}/`;
+    return `${basePath}${normalized}`;
+  };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>

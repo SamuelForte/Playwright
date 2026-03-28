@@ -143,7 +143,7 @@ export default function NotificacoesCondutor({
                     if (primeiraMulta) {
                       router.push(`/indicacao?ait=${primeiraMulta.ait}&placa=${primeiraMulta.placa}`);
                     } else {
-                      router.push('/indicacao');
+                      router.push('/indicacao/');
                     }
                   }}
                 >
