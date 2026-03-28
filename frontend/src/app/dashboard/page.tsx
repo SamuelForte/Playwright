@@ -292,13 +292,15 @@ export default function Dashboard() {
 
   const handleAddVeiculo = () => {
     if (!novaPlaca.trim() || !novoRenavam.trim()) {
-      alert('Preencha placa e renavam');
+      alert('Preencha placa e RENAVAM ou CHASSI');
       return;
     }
 
+    const documento = novoRenavam.trim().toUpperCase();
+
     const novoVeiculo: VeiculoComCondutor = {
       placa: novaPlaca.toUpperCase(),
-      renavam: novoRenavam,
+      renavam: documento,
       condutorId: condutorSelecionado || undefined
     };
 
@@ -564,7 +566,7 @@ export default function Dashboard() {
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'primary.main' }}>
                       <TableCell sx={{ color: 'white', fontWeight: 600 }}>Placa</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>RENAVAM</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>RENAVAM / CHASSI</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 600 }}>Condutor</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 600, textAlign: 'center' }}>Status</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 600, textAlign: 'center' }}>Ação</TableCell>
@@ -849,13 +851,13 @@ export default function Dashboard() {
             inputProps={{ maxLength: 7 }}
           />
           <TextField
-            label="RENAVAM (11 dígitos)"
+            label="RENAVAM ou CHASSI"
             value={novoRenavam}
-            onChange={(e) => setNovoRenavam(e.target.value)}
+            onChange={(e) => setNovoRenavam(e.target.value.toUpperCase())}
             fullWidth
             margin="normal"
-            placeholder="12345678901"
-            inputProps={{ maxLength: 11, type: 'number' }}
+            placeholder="RENAVAM: 12345678901 ou CHASSI: 9BWZZZ377VT004251"
+            inputProps={{ maxLength: 25 }}
           />
           <FormControl fullWidth margin="normal">
             <InputLabel>Condutor (Opcional)</InputLabel>
