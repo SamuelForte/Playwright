@@ -49,10 +49,7 @@ export default function NovaConsulta() {
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
-  const [veiculosAtivos, setVeiculosAtivos] = useState<Veiculo[]>([
-    { placa: 'SBA7F09', renavam: '01365705622' },
-    { placa: 'TIF1J98', renavam: '01450499292' },
-  ]);
+  const [veiculosAtivos, setVeiculosAtivos] = useState<Veiculo[]>([]);
 
   // Carregar veículos do localStorage quando o componente monta
   useEffect(() => {
@@ -60,8 +57,15 @@ export default function NovaConsulta() {
     if (veiculosSalvos) {
       try {
         const parsed = JSON.parse(veiculosSalvos);
-        if (parsed.length > 0) {
-          setVeiculosAtivos(parsed);
+        if (Array.isArray(parsed)) {
+          const normalizados: Veiculo[] = parsed
+            .map((item: any) => ({
+              placa: String(item?.placa || '').trim().toUpperCase(),
+              renavam: String(item?.renavam || '').trim(),
+            }))
+            .filter((item: Veiculo) => item.placa.length > 0 && item.renavam.length > 0);
+
+          setVeiculosAtivos(normalizados);
         }
       } catch (e) {
         console.error('Erro ao carregar veículos salvos:', e);
