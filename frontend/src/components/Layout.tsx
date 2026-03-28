@@ -17,6 +17,9 @@ import HistoryIcon from '@mui/icons-material/History';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
+const withBasePath = (path: string) => `${BASE_PATH}${path}`;
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -31,7 +34,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href="/dashboard"
+              href={withBasePath('/dashboard')}
               startIcon={<DashboardIcon />}
             >
               Dashboard
@@ -39,7 +42,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href="/nova-consulta"
+              href={withBasePath('/nova-consulta')}
               startIcon={<AddCircleOutlineIcon />}
             >
               Nova Consulta
@@ -47,7 +50,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href="/historico"
+              href={withBasePath('/historico')}
               startIcon={<HistoryIcon />}
             >
               Histórico
@@ -55,7 +58,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href="/indicacao"
+              href={withBasePath('/indicacao')}
               startIcon={<HowToRegIcon />}
             >
               Indicação
@@ -63,7 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href="/condutor-indicacao"
+              href={withBasePath('/condutor-indicacao')}
               startIcon={<VerifiedUserIcon />}
             >
               Responder
