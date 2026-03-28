@@ -7,9 +7,6 @@ const nextConfig = {
   trailingSlash: isGithubPages,
   basePath: isGithubPages ? '/Playwright' : '',
   assetPrefix: isGithubPages ? '/Playwright/' : undefined,
-  env: {
-    NEXT_PUBLIC_GH_PAGES_MODE: isGithubPages ? 'true' : 'false',
-  },
   images: {
     unoptimized: true,
   },
