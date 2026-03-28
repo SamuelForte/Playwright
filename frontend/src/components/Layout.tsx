@@ -18,6 +18,8 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const isGithubPagesBuild = process.env.NEXT_PUBLIC_GH_PAGES_MODE === 'true';
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="static" elevation={2}>
@@ -39,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href="/nova-consulta/"
+              href={isGithubPagesBuild ? '/Playwright/Playwright/nova-consulta/' : '/nova-consulta/'}
               startIcon={<AddCircleOutlineIcon />}
             >
               Nova Consulta
