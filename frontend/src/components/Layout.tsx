@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   AppBar,
@@ -17,10 +17,16 @@ import HistoryIcon from '@mui/icons-material/History';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
-const withBasePath = (path: string) => `${BASE_PATH}${path}`;
-
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const [basePath, setBasePath] = useState('');
+
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    setBasePath(pathname.startsWith('/Playwright') ? '/Playwright' : '');
+  }, []);
+
+  const withBasePath = (path: string) => `${basePath}${path}`;
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="static" elevation={2}>
