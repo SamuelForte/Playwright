@@ -6,9 +6,11 @@ const isLocalBrowser =
   isBrowser &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
+const RAILWAY_API_URL = 'https://detran-api-playwright-production.up.railway.app';
+
 const API_BASE_URL = !isBrowser
-  ? (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+  ? (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || RAILWAY_API_URL)
+  : (process.env.NEXT_PUBLIC_API_URL || (isLocalBrowser ? 'http://localhost:8000' : RAILWAY_API_URL));
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -17,7 +19,7 @@ export const api = axios.create({
   },
 });
 
-const API_FALLBACK_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_FALLBACK_URL = process.env.NEXT_PUBLIC_API_URL || (isLocalBrowser ? 'http://localhost:8000' : RAILWAY_API_URL);
 
 export interface Veiculo {
   placa: string;
