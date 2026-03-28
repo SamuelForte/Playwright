@@ -1,5 +1,7 @@
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 
 BASE = "https://sistemas.detran.ce.gov.br/central"
@@ -21,6 +23,28 @@ ORGAOS_RENAINF = {
     "215370": "Prefeitura de Reriutaba – CE",
 }
 
+def _create_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=1.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset(["GET", "POST"]),
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    })
+    return session
+
 
 def _get_form_csrf(session: requests.Session) -> str:
     """
@@ -31,7 +55,7 @@ def _get_form_csrf(session: requests.Session) -> str:
         f"{BASE}/veiculos/detalhamento_servico",
         params={"codigo": "0"},
         headers={"Referer": BASE, "X-Requested-With": "XMLHttpRequest"},
-        timeout=15,
+        timeout=25,
     )
     if r.status_code != 200:
         raise RuntimeError(f"Erro ao carregar formulário de login: HTTP {r.status_code}")
@@ -62,32 +86,33 @@ def consultar_multas(placa: str, renavam: str) -> dict:
             ]
         }
     """
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-    })
+    session = _create_session()
 
     # Passo 1 — estabelecer sessão e carregar form de login
-    session.get(BASE, timeout=15)
-    csrf = _get_form_csrf(session)
+    try:
+        session.get(BASE, timeout=25)
+        csrf = _get_form_csrf(session)
+    except requests.RequestException:
+        return {"placa": placa.upper(), "erro": "Portal DETRAN-CE indisponível (timeout)", "multas": [], "total_multas": 0}
+    except RuntimeError as e:
+        return {"placa": placa.upper(), "erro": str(e), "multas": [], "total_multas": 0}
 
     # Passo 2 — autenticar
-    r = session.post(
-        f"{BASE}/veiculos/login",
-        data={
-            "authenticity_token": csrf,
-            "veiculo[tipo_formulario]": "1",
-            "veiculo[placa]": placa.upper().strip(),
-            "veiculo[renavam_chassi]": renavam.strip(),
-        },
-        headers={"Referer": f"{BASE}/veiculos/detalhamento_servico?codigo=0"},
-        allow_redirects=True,
-        timeout=20,
-    )
+    try:
+        r = session.post(
+            f"{BASE}/veiculos/login",
+            data={
+                "authenticity_token": csrf,
+                "veiculo[tipo_formulario]": "1",
+                "veiculo[placa]": placa.upper().strip(),
+                "veiculo[renavam_chassi]": renavam.strip(),
+            },
+            headers={"Referer": f"{BASE}/veiculos/detalhamento_servico?codigo=0"},
+            allow_redirects=True,
+            timeout=30,
+        )
+    except requests.RequestException:
+        return {"placa": placa.upper(), "erro": "Portal DETRAN-CE fora do ar (login)", "multas": [], "total_multas": 0}
 
     # Login retorna JSON: {"status":"succ","errors":""} ou {"status":"error","errors":"msg"}
     try:
@@ -101,7 +126,10 @@ def consultar_multas(placa: str, renavam: str) -> dict:
             return {"placa": placa.upper(), "erro": "Falha na autenticação", "multas": [], "total_multas": 0}
 
     # Passo 3 — buscar multas
-    r_multas = session.get(f"{BASE}/veiculos/multas", timeout=20)
+    try:
+        r_multas = session.get(f"{BASE}/veiculos/multas", timeout=30)
+    except requests.RequestException:
+        return {"placa": placa.upper(), "erro": "Portal DETRAN-CE fora do ar (multas)", "multas": [], "total_multas": 0}
     multas = _parsear_multas(r_multas.text)
 
     return {

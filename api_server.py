@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 import sys
 import traceback
+import requests
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente
@@ -423,6 +424,14 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
                     "valor_total": valor_veiculo,
                     "mensagem": f"{len(multas)} multa(s) encontrada(s)",
                 })
+
+            except requests.exceptions.RequestException:
+                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
+                    "status": "error",
+                    "mensagem": "Portal DETRAN-CE indisponível (timeout)",
+                })
+                print(f"Timeout ao processar {veiculo_data.placa} (DETRAN-CE indisponível)")
+                continue
 
             except Exception as e:
                 db_update_veiculo_status(consulta_id, veiculo_data.placa, {
