@@ -41,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href={isGithubPagesBuild ? '/Playwright/Playwright/nova-consulta/' : '/nova-consulta/'}
+              href={isGithubPagesBuild ? '/Playwright/nova-consulta/' : '/nova-consulta/'}
               startIcon={<AddCircleOutlineIcon />}
             >
               Nova Consulta
