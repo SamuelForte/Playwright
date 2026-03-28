@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import {
   AppBar,
@@ -18,18 +18,6 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const [basePath, setBasePath] = useState('');
-
-  useEffect(() => {
-    const pathname = window.location.pathname;
-    setBasePath(pathname.startsWith('/Playwright') ? '/Playwright' : '');
-  }, []);
-
-  const withBasePath = (path: string) => {
-    const normalized = path.endsWith('/') ? path : `${path}/`;
-    return `${basePath}${normalized}`;
-  };
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="static" elevation={2}>
@@ -43,7 +31,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href={withBasePath('/dashboard')}
+              href="/dashboard/"
               startIcon={<DashboardIcon />}
             >
               Dashboard
@@ -51,7 +39,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href={withBasePath('/nova-consulta')}
+              href="/nova-consulta/"
               startIcon={<AddCircleOutlineIcon />}
             >
               Nova Consulta
@@ -59,7 +47,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href={withBasePath('/historico')}
+              href="/historico/"
               startIcon={<HistoryIcon />}
             >
               Histórico
@@ -67,7 +55,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href={withBasePath('/indicacao')}
+              href="/indicacao/"
               startIcon={<HowToRegIcon />}
             >
               Indicação
@@ -75,7 +63,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button
               color="inherit"
               component={Link}
-              href={withBasePath('/condutor-indicacao')}
+              href="/condutor-indicacao/"
               startIcon={<VerifiedUserIcon />}
             >
               Responder
