@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-static';
 
+export async function generateStaticParams() {
+  // Para permitir `next export`/`output: export` em CI (GitHub Pages),
+  // retornamos lista vazia para rotas dinâmicas do proxy — isso evita
+  // que o coletor de páginas tente pré-renderizar caminhos dinâmicos.
+  return [] as { path: string[] }[];
+}
+
 const configuredBackend = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
 const LOCAL_BACKEND_URL = configuredBackend && /^https?:\/\//i.test(configuredBackend)
   ? configuredBackend
