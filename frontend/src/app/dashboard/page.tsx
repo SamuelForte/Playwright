@@ -3,11 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInCalendarDays, addDays, parse, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
+import { useRouter } from 'next/navigation';
 import { 
   Grid, Typography, Box, Paper, Button, TextField, Dialog,
   DialogTitle, DialogContent, DialogActions, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, IconButton, Chip,
-  Tabs, Tab, MenuItem, Select, FormControl, InputLabel
+  Tabs, Tab, MenuItem, Select, FormControl, InputLabel, ToggleButton, ToggleButtonGroup
 } from '@mui/material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -22,12 +23,13 @@ import ErrorIcon from '@mui/icons-material/Error';
 import Layout from '@/components/Layout';
 import StatusCard from '@/components/StatusCard';
 import NotificacoesCondutor from '@/components/NotificacoesCondutor';
-import { Condutor, Veiculo, criarCondutor, listarCondutores, removerCondutor } from '@/lib/api';
+import { Condutor, Veiculo, criarCondutor, iniciarConsulta, listarCondutores, removerCondutor } from '@/lib/api';
 
 const PRAZO_INDICACAO_DIAS = 30;
 
 interface VeiculoComCondutor extends Veiculo {
   condutorId?: string;
+  status?: 'ativo' | 'inativo';
 }
 
 interface Multa {
@@ -45,6 +47,7 @@ interface Multa {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState({
     veiculosConsultados: 0,
     multasEncontradas: 0,
@@ -53,6 +56,7 @@ export default function Dashboard() {
   });
 
   const [abaSelecionada, setAbaSelecionada] = useState(0);
+  const [consultando, setConsultando] = useState(false);
 
   const [veiculos, setVeiculos] = useState<VeiculoComCondutor[]>([
     { placa: 'SBA7F09', renavam: '01365705622' },
@@ -75,6 +79,7 @@ export default function Dashboard() {
   const condutores = condutoresQuery.data || [];
 
   const [indicacaoPrazo, setIndicacaoPrazo] = useState<Record<string, { notificacao: Date; prazo: Date }>>({});
+  const [statusVeiculos, setStatusVeiculos] = useState<Record<string, 'ativo' | 'inativo'>>({});
 
   const [openDialogCondutor, setOpenDialogCondutor] = useState(false);
   const [novoCondutorNome, setNovoCondutorNome] = useState('');
@@ -91,6 +96,10 @@ export default function Dashboard() {
   const [dataFim, setDataFim] = useState('');
   const [filtroPlaca, setFiltroPlaca] = useState('');
   const [filtroArtigo, setFiltroArtigo] = useState('');
+
+  const veiculosAtivos = veiculos.filter(
+    (veiculo) => (statusVeiculos[veiculo.placa] || 'ativo') === 'ativo'
+  );
 
   const artigosCTB = [
     { codigo: 'Art. 161', descricao: 'Infringir qualquer norma do CTB' },
@@ -181,6 +190,15 @@ export default function Dashboard() {
     const veiculosSalvos = localStorage.getItem('veiculos');
     if (veiculosSalvos) {
       setVeiculos(JSON.parse(veiculosSalvos));
+    }
+
+    const statusSalvos = localStorage.getItem('status_veiculos');
+    if (statusSalvos) {
+      try {
+        setStatusVeiculos(JSON.parse(statusSalvos));
+      } catch (e) {
+        console.error('Erro ao carregar status dos veículos', e);
+      }
     }
 
     // Carregar condutores do localStorage
@@ -320,6 +338,32 @@ export default function Dashboard() {
     localStorage.setItem('veiculos', JSON.stringify(veiculosAtualizados));
   };
 
+  const handleStatusVeiculo = (placa: string, novoStatus: 'ativo' | 'inativo') => {
+    const statusAtualizado = { ...statusVeiculos, [placa]: novoStatus };
+    setStatusVeiculos(statusAtualizado);
+    localStorage.setItem('status_veiculos', JSON.stringify(statusAtualizado));
+  };
+
+  const handleIniciarConsultaAutomatica = async () => {
+    if (veiculosAtivos.length === 0) {
+      alert('Não há veículos ativos para consulta.');
+      return;
+    }
+
+    setConsultando(true);
+    try {
+      const resposta = await iniciarConsulta(
+        veiculosAtivos.map(({ placa, renavam }) => ({ placa, renavam }))
+      );
+      router.push(`/processamento?id=${resposta.consulta_id}`);
+    } catch (error: any) {
+      const mensagem = error?.response?.data?.detail || error?.message || 'Erro ao iniciar consulta automática';
+      alert(mensagem);
+    } finally {
+      setConsultando(false);
+    }
+  };
+
   const parseDataBR = (value: string) => {
     if (!value) return null;
     const parsed = parse(value, 'dd/MM/yyyy', new Date());
@@ -412,6 +456,19 @@ export default function Dashboard() {
         <Typography variant="body1" color="text.secondary">
           Gerenciamento de veículos e resumo de consultas
         </Typography>
+        <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleIniciarConsultaAutomatica}
+            disabled={consultando || veiculosAtivos.length === 0}
+          >
+            {consultando ? 'Iniciando...' : 'Iniciar Consulta Automática'}
+          </Button>
+          <Typography variant="body2" color="text.secondary">
+            {veiculosAtivos.length} veículo(s) ativo(s) serão consultado(s)
+          </Typography>
+        </Box>
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -589,7 +646,23 @@ export default function Dashboard() {
                                 </Typography>
                               </Box>
                             ) : (
-                              <Chip label="Ativo" color="success" size="small" />
+                              <ToggleButtonGroup
+                                value={statusVeiculos[veiculo.placa] || 'ativo'}
+                                exclusive
+                                onChange={(event, newStatus) => {
+                                  if (newStatus !== null) {
+                                    handleStatusVeiculo(veiculo.placa, newStatus);
+                                  }
+                                }}
+                                size="small"
+                              >
+                                <ToggleButton value="ativo" sx={{ px: 2 }}>
+                                  Ativo
+                                </ToggleButton>
+                                <ToggleButton value="inativo" sx={{ px: 2 }}>
+                                  Inativo
+                                </ToggleButton>
+                              </ToggleButtonGroup>
                             )}
                           </TableCell>
                           <TableCell sx={{ textAlign: 'center' }}>

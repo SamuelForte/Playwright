@@ -16,32 +16,6 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 15000): Promise<
   ]);
 };
 
-const iniciarViaFetch = async (url: string, veiculos: Veiculo[]): Promise<{ consulta_id: string }> => {
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ veiculos }),
-    });
-  } catch {
-    throw new Error(`Falha de conexão com a API (${url}). Verifique se o backend está ativo e com CORS liberado.`);
-  }
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data?.detail || data?.error || `Falha ao iniciar consulta (${response.status}).`);
-  }
-
-  if (!data?.consulta_id) {
-    throw new Error('API não retornou o identificador da consulta.');
-  }
-
-  return data as { consulta_id: string };
-};
-
 export default function NovaConsulta() {
   const router = useRouter();
   const isLocalDev =
@@ -79,36 +53,8 @@ export default function NovaConsulta() {
 
     try {
       console.log('Iniciando consulta com veículos:', veiculosAtivos);
-      let consultaId: string | null = null;
-
-      try {
-        const { consulta_id } = await withTimeout(iniciarConsulta(veiculosAtivos), 15000);
-        consultaId = consulta_id;
-      } catch (primeiroErro) {
-        if (!isLocalDev) {
-          throw primeiroErro;
-        }
-
-        console.warn('Falha na tentativa principal. Tentando proxy local...', primeiroErro);
-        try {
-          const { consulta_id } = await withTimeout(
-            iniciarViaFetch('/api/proxy/consultas', veiculosAtivos),
-            15000
-          );
-          consultaId = consulta_id;
-        } catch (segundoErro) {
-          console.warn('Falha no proxy local. Tentando backend direto...', segundoErro);
-          const { consulta_id } = await withTimeout(
-            iniciarViaFetch('http://localhost:8000/consultas', veiculosAtivos),
-            15000
-          );
-          consultaId = consulta_id;
-        }
-      }
-
-      if (!consultaId) {
-        throw new Error('Não foi possível obter o ID da consulta.');
-      }
+      const { consulta_id } = await withTimeout(iniciarConsulta(veiculosAtivos), 15000);
+      const consultaId = consulta_id;
 
       console.log('Consulta iniciada com sucesso. ID:', consultaId);
       router.push(`/processamento?id=${consultaId}`);

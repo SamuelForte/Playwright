@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 import uuid
 import threading
@@ -10,6 +10,7 @@ import os
 import sys
 import traceback
 import requests
+from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente
@@ -30,6 +31,9 @@ def _build_allowed_origins() -> List[str]:
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
         "https://samuelforte.github.io",
         "https://samuelforte.github.io/Playwright",
     }
@@ -68,11 +72,16 @@ else:
 CONSULTAS_MEM: Dict[str, Dict[str, Any]] = {}
 VEICULOS_CONSULTA_MEM: Dict[str, List[Dict[str, Any]]] = {}
 MULTAS_MEM: Dict[str, List[Dict[str, Any]]] = {}
+LOGS_MEM: Dict[str, List[Dict[str, str]]] = {}
 
 # CORS para permitir frontend
+allow_origin_regex_env = os.getenv("ALLOWED_ORIGIN_REGEX")
+allow_origin_regex_default = r"https://(.*\.railway\.app|.*\.vercel\.app)"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_allowed_origins(),
+    allow_origin_regex=allow_origin_regex_env or allow_origin_regex_default,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -103,6 +112,7 @@ class ConsultaStatus(BaseModel):
     total_multas: int
     valor_total: float
     created_at: str
+    logs: List[Dict[str, str]] = Field(default_factory=list)
 
 class Condutor(BaseModel):
     id: str
@@ -155,6 +165,7 @@ def db_insert_consulta(consulta_id: str, veiculos: List[Veiculo]):
         CONSULTAS_MEM[consulta_id] = consulta_payload
         VEICULOS_CONSULTA_MEM[consulta_id] = veiculos_rows
         MULTAS_MEM[consulta_id] = []
+        LOGS_MEM[consulta_id] = []
         return
 
     # Cria consulta
@@ -166,6 +177,7 @@ def db_insert_consulta(consulta_id: str, veiculos: List[Veiculo]):
         CONSULTAS_MEM[consulta_id] = consulta_payload
         VEICULOS_CONSULTA_MEM[consulta_id] = veiculos_rows
         MULTAS_MEM[consulta_id] = []
+        LOGS_MEM[consulta_id] = []
         return
 
     try:
@@ -176,6 +188,24 @@ def db_insert_consulta(consulta_id: str, veiculos: List[Veiculo]):
         CONSULTAS_MEM[consulta_id] = consulta_payload
         VEICULOS_CONSULTA_MEM[consulta_id] = veiculos_rows
         MULTAS_MEM[consulta_id] = []
+        LOGS_MEM[consulta_id] = []
+
+
+def consulta_log(consulta_id: str, mensagem: str, nivel: str = "info"):
+    registro = {
+        "timestamp": datetime.now().isoformat(),
+        "nivel": nivel,
+        "mensagem": mensagem,
+    }
+
+    if _using_memory_db():
+        LOGS_MEM.setdefault(consulta_id, []).append(registro)
+        LOGS_MEM[consulta_id] = LOGS_MEM[consulta_id][-300:]
+        return
+
+    # Evita quebrar a consulta caso a persistência de logs não esteja disponível.
+    LOGS_MEM.setdefault(consulta_id, []).append(registro)
+    LOGS_MEM[consulta_id] = LOGS_MEM[consulta_id][-300:]
 
 
 def db_update_consulta_status(consulta_id: str, status: str, excel_path: Optional[str] = None,
@@ -276,6 +306,7 @@ def db_get_consulta_com_status(consulta_id: str) -> Dict[str, Any]:
         return {
             "consulta": consulta,
             "veiculos": VEICULOS_CONSULTA_MEM.get(consulta_id, []),
+            "logs": LOGS_MEM.get(consulta_id, []),
         }
 
     try:
@@ -290,11 +321,13 @@ def db_get_consulta_com_status(consulta_id: str) -> Dict[str, Any]:
         return {
             "consulta": consulta_mem,
             "veiculos": VEICULOS_CONSULTA_MEM.get(consulta_id, []),
+            "logs": LOGS_MEM.get(consulta_id, []),
         }
 
     return {
         "consulta": consulta.data,
         "veiculos": veiculos.data or [],
+        "logs": LOGS_MEM.get(consulta_id, []),
     }
 
 
@@ -381,65 +414,73 @@ def _multa_para_excel(multa: Dict, placa: str, numero: int) -> Dict:
 
 
 def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
-    """Processa veículos em background usando requests + BeautifulSoup."""
+    """Processa veículos em background usando automação Playwright (detran_manual.py)."""
     total_geral = 0.0
-    todas_multas_excel = []  # formato capital para salvar_no_excel
+    todas_multas_excel = []  # formato já esperado por salvar_no_excel
 
     try:
         db_update_consulta_status(consulta_id, "processing")
+        consulta_log(consulta_id, f"Consulta iniciada com {len(veiculos)} veículo(s)")
 
-        for veiculo_data in veiculos:
-            db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                "status": "processing",
-                "mensagem": "Consultando DETRAN-CE...",
-            })
-
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
             try:
-                resultado = detran_scraper.consultar_multas(
-                    veiculo_data.placa, veiculo_data.renavam
-                )
-
-                if resultado.get("erro"):
+                for i, veiculo_data in enumerate(veiculos, 1):
+                    consulta_log(consulta_id, f"Iniciando veículo {i}/{len(veiculos)}: {veiculo_data.placa}")
                     db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                        "status": "error",
-                        "mensagem": resultado["erro"],
+                        "status": "processing",
+                        "mensagem": "Executando automação DETRAN (Playwright)...",
                     })
-                    continue
 
-                multas = resultado["multas"]
-                valor_veiculo = sum(m.get("valor_numerico", 0.0) for m in multas)
+                    try:
+                        valor_veiculo, multas = detran_manual.processar_veiculo(
+                            browser,
+                            {"placa": veiculo_data.placa, "renavam": veiculo_data.renavam},
+                            i,
+                        )
 
-                # Adiciona placa a cada multa para o banco
-                multas_com_placa = [{**m, "placa": veiculo_data.placa} for m in multas]
-                db_insert_multas(consulta_id, multas_com_placa)
+                        multas = multas or []
+                        total_geral += float(valor_veiculo or 0.0)
 
-                # Converte para formato Excel
-                for i, m in enumerate(multas, 1):
-                    todas_multas_excel.append(_multa_para_excel(m, veiculo_data.placa, i))
+                        consulta_log(
+                            consulta_id,
+                            f"Veículo {veiculo_data.placa}: {len(multas)} multa(s) encontrada(s), total R$ {float(valor_veiculo or 0.0):.2f}"
+                        )
 
-                total_geral += valor_veiculo
-                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                    "status": "completed",
-                    "multas_count": len(multas),
-                    "valor_total": valor_veiculo,
-                    "mensagem": f"{len(multas)} multa(s) encontrada(s)",
-                })
+                        if multas:
+                            multas_com_placa = [{**m, "placa": veiculo_data.placa} for m in multas]
+                            db_insert_multas(consulta_id, multas_com_placa)
+                            todas_multas_excel.extend(multas)
 
-            except requests.exceptions.RequestException:
-                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                    "status": "error",
-                    "mensagem": "Portal DETRAN-CE indisponível (timeout)",
-                })
-                print(f"Timeout ao processar {veiculo_data.placa} (DETRAN-CE indisponível)")
-                continue
+                            for multa in multas:
+                                consulta_log(
+                                    consulta_id,
+                                    (
+                                        f"{veiculo_data.placa} | AIT {multa.get('ait', '-')} | "
+                                        f"{multa.get('motivo', '-')[:120]} | "
+                                        f"Infração {multa.get('data_infracao', '-')} | "
+                                        f"Vencimento {multa.get('data_vencimento', '-')} | "
+                                        f"Valor {multa.get('valor_original', '-')}")
+                                )
 
-            except Exception as e:
-                db_update_veiculo_status(consulta_id, veiculo_data.placa, {
-                    "status": "error",
-                    "mensagem": f"Erro: {str(e)}",
-                })
-                print(f"Erro ao processar {veiculo_data.placa}:")
-                print(traceback.format_exc())
+                        db_update_veiculo_status(consulta_id, veiculo_data.placa, {
+                            "status": "completed",
+                            "multas_count": len(multas),
+                            "valor_total": float(valor_veiculo or 0.0),
+                            "mensagem": f"{len(multas)} multa(s) encontrada(s)",
+                        })
+                        consulta_log(consulta_id, f"Veículo {veiculo_data.placa} concluído com sucesso")
+
+                    except Exception as e:
+                        db_update_veiculo_status(consulta_id, veiculo_data.placa, {
+                            "status": "error",
+                            "mensagem": f"Erro: {str(e)}",
+                        })
+                        consulta_log(consulta_id, f"Erro no veículo {veiculo_data.placa}: {e}", "error")
+                        print(f"Erro ao processar {veiculo_data.placa}:")
+                        print(traceback.format_exc())
+            finally:
+                browser.close()
 
         if todas_multas_excel:
             salvar_no_excel(todas_multas_excel)
@@ -454,11 +495,13 @@ def processar_consulta_background(consulta_id: str, veiculos: List[Veiculo]):
             total_multas=len(todas_multas_excel),
             valor_total=total_geral,
         )
+        consulta_log(consulta_id, f"Consulta finalizada: {len(todas_multas_excel)} multa(s) e total R$ {total_geral:.2f}")
 
         print(f"Consulta {consulta_id} concluída: {len(todas_multas_excel)} multas | R$ {total_geral:.2f}")
 
     except Exception:
         db_update_consulta_status(consulta_id, "error")
+        consulta_log(consulta_id, "Consulta finalizada com erro inesperado", "error")
         print(f"Erro na consulta {consulta_id}:")
         print(traceback.format_exc())
 

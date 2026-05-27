@@ -23,6 +23,29 @@ ORGAOS_RENAINF = {
     "215370": "Prefeitura de Reriutaba – CE",
 }
 
+
+def _parse_valor_brl(valor_texto: str) -> float:
+    valor_limpo = (valor_texto or "").replace("R$", "").replace(" ", "").strip()
+    if not valor_limpo:
+        return 0.0
+
+    if "," in valor_limpo and "." in valor_limpo:
+        # Formato brasileiro com milhar: 1.234,56
+        valor_limpo = valor_limpo.replace(".", "").replace(",", ".")
+    elif "," in valor_limpo:
+        # Formato brasileiro simples: 104,13
+        valor_limpo = valor_limpo.replace(",", ".")
+    else:
+        # Formato internacional: 104.13 (mantém ponto decimal)
+        valor_limpo = valor_limpo
+
+    if not valor_limpo:
+        return 0.0
+    try:
+        return float(valor_limpo)
+    except ValueError:
+        return 0.0
+
 def _create_session() -> requests.Session:
     session = requests.Session()
     retry = Retry(
@@ -160,6 +183,10 @@ def _parsear_multas(html: str) -> list:
         partes = valor_raw.split("*")
         id_orgao = partes[0] if partes else "?"
 
+        valor_numerico = _parse_valor_brl(checkbox.get("data-valor", ""))
+        if valor_numerico <= 0:
+            valor_numerico = _parse_valor_brl(cells[7] if len(cells) > 7 else "")
+
         multas.append({
             "ait":              cells[1],
             "ait_originaria":   cells[2],
@@ -168,7 +195,7 @@ def _parsear_multas(html: str) -> list:
             "data_vencimento":  cells[5],
             "valor_original":   cells[6],
             "valor_a_pagar":    cells[7],
-            "valor_numerico":   float(checkbox.get("data-valor", 0) or 0),
+            "valor_numerico":   valor_numerico,
             "id_orgao":         id_orgao,
             "orgao":            ORGAOS_RENAINF.get(id_orgao, f"Órgão cod. {id_orgao}"),
             "cod_infracao_ctb": partes[2] if len(partes) > 2 else "",

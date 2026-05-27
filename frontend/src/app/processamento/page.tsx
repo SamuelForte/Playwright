@@ -15,12 +15,14 @@ import {
   Button,
   Alert,
   LinearProgress,
+  Divider,
+  Chip,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import Layout from '@/components/Layout';
 import ProcessStatus from '@/components/ProcessStatus';
-import { obterStatus, VeiculoStatus } from '@/lib/api';
+import { obterStatus, VeiculoStatus, LogEntry } from '@/lib/api';
 
 function ProcessamentoContent() {
   const router = useRouter();
@@ -42,6 +44,24 @@ function ProcessamentoContent() {
 
   const handleVerResultados = () => {
     router.push(`/resultados?id=${consultaId}`);
+  };
+
+  const logsFormatados = (data?.logs || []).map((log: LogEntry) => ({
+    ...log,
+    hora: new Date(log.timestamp).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
+  }));
+
+  const getLogColor = (nivel: LogEntry['nivel']) => {
+    switch (nivel) {
+      case 'error': return 'error';
+      case 'warn': return 'warning';
+      case 'success': return 'success';
+      default: return 'info';
+    }
   };
 
   if (!consultaId) {
@@ -92,6 +112,61 @@ function ProcessamentoContent() {
           progresso={progresso}
         />
       </Box>
+
+      <Paper elevation={2} sx={{ mb: 4, p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+          <Typography variant="h6" fontWeight={600}>
+            Logs da extração
+          </Typography>
+          <Chip label={`${logsFormatados.length} evento(s)`} size="small" />
+        </Box>
+
+        <Divider sx={{ mb: 2 }} />
+
+        {logsFormatados.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Aguardando primeiras mensagens da extração...
+          </Typography>
+        ) : (
+          <Box
+            sx={{
+              maxHeight: 360,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+              pr: 1,
+            }}
+          >
+            {logsFormatados.map((log, index) => (
+              <Box
+                key={`${log.timestamp}-${index}`}
+                sx={{
+                  p: 1.25,
+                  borderRadius: 2,
+                  bgcolor: 'background.default',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                  <Chip
+                    size="small"
+                    label={log.nivel.toUpperCase()}
+                    color={getLogColor(log.nivel)}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    {log.hora}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {log.mensagem}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Paper>
 
       <TableContainer component={Paper} elevation={2}>
         <Table>

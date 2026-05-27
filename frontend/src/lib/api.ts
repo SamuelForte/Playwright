@@ -10,7 +10,7 @@ const RAILWAY_API_URL = 'https://detran-api-playwright-production.up.railway.app
 
 const API_BASE_URL = !isBrowser
   ? (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || RAILWAY_API_URL)
-  : (process.env.NEXT_PUBLIC_API_URL || (isLocalBrowser ? 'http://localhost:8000' : RAILWAY_API_URL));
+  : (isLocalBrowser ? '/api/proxy' : (process.env.NEXT_PUBLIC_API_URL || RAILWAY_API_URL));
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -19,7 +19,9 @@ export const api = axios.create({
   },
 });
 
-const API_FALLBACK_URL = process.env.NEXT_PUBLIC_API_URL || (isLocalBrowser ? 'http://localhost:8000' : RAILWAY_API_URL);
+const API_FALLBACK_URL = isLocalBrowser
+  ? 'http://localhost:8000'
+  : (process.env.NEXT_PUBLIC_API_URL || RAILWAY_API_URL);
 
 export interface Veiculo {
   placa: string;
@@ -47,6 +49,13 @@ export interface ConsultaStatus {
   total_multas: number;
   valor_total: number;
   created_at: string;
+  logs?: LogEntry[];
+}
+
+export interface LogEntry {
+  timestamp: string;
+  nivel: 'info' | 'error' | 'warn' | 'success';
+  mensagem: string;
 }
 
 export interface VeiculoStatus {
@@ -138,6 +147,10 @@ export const iniciarConsulta = async (veiculos: Veiculo[]) => {
       throw proxyError;
     }
 
+    if (isLocalBrowser) {
+      throw proxyError;
+    }
+
     const response = await axios.post<{ consulta_id: string }>(
       `${API_FALLBACK_URL}/consultas`,
       { veiculos },
@@ -157,6 +170,10 @@ export const obterStatus = async (consultaId: string) => {
       throw proxyError;
     }
 
+    if (isLocalBrowser) {
+      throw proxyError;
+    }
+
     const response = await axios.get<ConsultaStatus>(`${API_FALLBACK_URL}/consultas/${consultaId}/status`);
     return response.data;
   }
@@ -169,6 +186,10 @@ export const obterResultado = async (consultaId: string) => {
     return response.data;
   } catch (proxyError) {
     if (typeof window === 'undefined') {
+      throw proxyError;
+    }
+
+    if (isLocalBrowser) {
       throw proxyError;
     }
 
