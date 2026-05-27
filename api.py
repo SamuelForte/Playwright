@@ -1,5 +1,7 @@
 from typing import List, Optional, Any, Dict
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import os
 from pydantic import BaseModel
 from playwright.sync_api import sync_playwright, TimeoutError
 
@@ -7,6 +9,36 @@ from playwright.sync_api import sync_playwright, TimeoutError
 from detran_manual import processar_veiculo, salvar_no_excel, formatar_valor_br
 
 app = FastAPI(title="DETRAN-CE API", version="1.0.0")
+
+
+def _build_allowed_origins() -> List[str]:
+    origins = {
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://samuelforte.github.io",
+        "https://samuelforte.github.io/Playwright",
+    }
+    extra = os.getenv("ALLOWED_ORIGINS", "")
+    if extra:
+        for o in extra.split(","):
+            norm = o.strip().rstrip("/")
+            if norm:
+                origins.add(norm)
+    return sorted(origins)
+
+
+# Habilita CORS para permitir chamadas do GitHub Pages e localhost
+allow_origin_regex_env = os.getenv("ALLOWED_ORIGIN_REGEX")
+allow_origin_regex_default = r"https://(.*\.railway\.app|.*\.vercel\.app)"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_build_allowed_origins(),
+    allow_origin_regex=allow_origin_regex_env or allow_origin_regex_default,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class Veiculo(BaseModel):
     placa: str
