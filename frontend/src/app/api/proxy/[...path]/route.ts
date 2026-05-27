@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-static';
+
 const configuredBackend = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
 const LOCAL_BACKEND_URL = configuredBackend && /^https?:\/\//i.test(configuredBackend)
   ? configuredBackend
